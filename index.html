@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1B5E20">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Login — Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">FD</div>
+        <h1 id="familyNameDisplay">Family Dues</h1>
+        <p>Sign in to manage your family dues</p>
+      </div>
+
+      <div id="loginError" class="login-error"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="username" class="required">Username</label>
+          <input type="text" id="username" class="form-control" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password" class="required">Password</label>
+          <input type="password" id="password" class="form-control" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;">Login</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

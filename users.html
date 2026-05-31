@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1B5E20">
+  <title>Users — Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <h2 id="familyName">Family Dues</h2>
+        <span>Dues Management</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
+        <a href="members.html" class="nav-item" data-page="members">Members</a>
+        <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
+        <a href="users.html" class="nav-item" data-page="users">Users</a>
+        <a href="#" id="logoutBtn" class="nav-item">Logout</a>
+      </nav>
+    </aside>
+
+    <div class="main-content">
+      <header class="top-header">
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+        <h1 class="page-title" style="margin:0;font-size:1.125rem;">User Management</h1>
+        <div class="header-user">
+          <div class="header-user-info">
+            <div id="userName" class="header-user-name"></div>
+            <div id="userRole" class="header-user-role"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <div class="table-toolbar">
+          <h2 class="page-title" style="margin:0;">System Users</h2>
+          <button id="createUserBtn" class="btn btn-primary btn-sm">+ Create User</button>
+        </div>
+
+        <div class="card-section">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>User ID</th>
+                  <th>Username</th>
+                  <th>Member Name</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Last Login</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Create User Modal -->
+  <div id="createUserModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Create User</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="createUserForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="createMember" class="required">Select Member</label>
+            <select id="createMember" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label for="createUsername" class="required">Username</label>
+            <input type="text" id="createUsername" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="createPassword" class="required">Temporary Password</label>
+            <input type="text" id="createPassword" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="createRole" class="required">Role</label>
+            <select id="createRole" class="form-control">
+              <option value="Member">Member</option>
+              <option value="Treasurer">Treasurer</option>
+              <option value="Secretary">Secretary</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit User Modal -->
+  <div id="editUserModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Edit User</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="editUserForm">
+        <div class="modal-body">
+          <input type="hidden" id="editUserId">
+          <p><strong>Username:</strong> <span id="editUsername"></span></p>
+          <div class="form-group">
+            <label for="editRole">Role</label>
+            <select id="editRole" class="form-control">
+              <option value="Member">Member</option>
+              <option value="Treasurer">Treasurer</option>
+              <option value="Secretary">Secretary</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editActive">Account Status</label>
+            <select id="editActive" class="form-control">
+              <option value="TRUE">Active</option>
+              <option value="FALSE">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="resetPasswordBtn">Reset Password</button>
+          <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let session;
+    let allUsers = [];
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      session = initPageLayout('users', ['Admin']);
+      if (!session) return;
+
+      setupModalClose('createUserModal');
+      setupModalClose('editUserModal');
+      document.querySelectorAll('.modal-close-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          closeModal(btn.closest('.modal-overlay').id);
+        });
+      });
+
+      document.getElementById('createUserBtn').addEventListener('click', function () {
+        document.getElementById('createUserForm').reset();
+        openModal('createUserModal');
+      });
+
+      document.getElementById('createUserForm').addEventListener('submit', createUser);
+      document.getElementById('editUserForm').addEventListener('submit', saveUser);
+      document.getElementById('resetPasswordBtn').addEventListener('click', resetPassword);
+
+      const membersResult = await API.getMembers('all');
+      if (membersResult.success) {
+        populateSelect(document.getElementById('createMember'), membersResult.data.filter(function (m) {
+          return m.Status !== 'Inactive';
+        }), 'MemberID', 'FullName', 'Select member...');
+      }
+
+      await loadUsers();
+    });
+
+    async function loadUsers() {
+      const result = await API.getUsers();
+      if (!result.success) {
+        showToast(result.error, 'error');
+        return;
+      }
+      allUsers = result.data;
+      renderUsers();
+    }
+
+    function renderUsers() {
+      const tbody = document.getElementById('usersBody');
+      if (allUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No records found</td></tr>';
+        refreshResponsiveTables();
+        return;
+      }
+
+      tbody.innerHTML = allUsers.map(function (u) {
+        const active = String(u.IsActive).toUpperCase() === 'TRUE';
+        return `<tr>
+          <td>${u.UserID}</td>
+          <td>${u.Username}</td>
+          <td>${u.MemberName || '—'}</td>
+          <td>${u.Role}</td>
+          <td>${statusBadge(active ? 'Active' : 'Inactive')}</td>
+          <td>${u.LastLogin ? formatDate(u.LastLogin) : 'Never'}</td>
+          <td><button class="btn btn-sm btn-outline" onclick="editUser('${u.UserID}')">Edit</button></td>
+        </tr>`;
+      }).join('');
+      refreshResponsiveTables();
+    }
+
+    async function createUser(e) {
+      e.preventDefault();
+      const valid = validateRequired([
+        { id: 'createMember', message: 'Select a member' },
+        { id: 'createUsername', message: 'Username required' },
+        { id: 'createPassword', message: 'Password required' }
+      ]);
+      if (!valid) return;
+
+      const result = await API.createUser({
+        memberId: document.getElementById('createMember').value,
+        username: document.getElementById('createUsername').value.trim(),
+        password: document.getElementById('createPassword').value,
+        role: document.getElementById('createRole').value
+      });
+
+      if (result.success) {
+        showToast('User created. Welcome email sent.');
+        closeModal('createUserModal');
+        await loadUsers();
+      } else {
+        showToast(result.error, 'error');
+      }
+    }
+
+    function editUser(userId) {
+      const user = allUsers.find(function (u) { return u.UserID === userId; });
+      if (!user) return;
+      document.getElementById('editUserId').value = user.UserID;
+      document.getElementById('editUsername').textContent = user.Username;
+      document.getElementById('editRole').value = user.Role;
+      document.getElementById('editActive').value = String(user.IsActive).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
+      openModal('editUserModal');
+    }
+
+    async function saveUser(e) {
+      e.preventDefault();
+      const userId = document.getElementById('editUserId').value;
+      const roleResult = await API.updateUserRole(userId, document.getElementById('editRole').value);
+      const activeResult = await API.toggleUserActive(userId, document.getElementById('editActive').value === 'TRUE');
+
+      if (roleResult.success && activeResult.success) {
+        showToast('User updated');
+        closeModal('editUserModal');
+        await loadUsers();
+      } else {
+        showToast(roleResult.error || activeResult.error, 'error');
+      }
+    }
+
+    async function resetPassword() {
+      const userId = document.getElementById('editUserId').value;
+      if (!confirmAction('Reset password for this user? A new temporary password will be emailed.')) return;
+      const result = await API.resetPassword(userId);
+      if (result.success) {
+        showToast('Password reset. Email sent to user.');
+      } else {
+        showToast(result.error, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

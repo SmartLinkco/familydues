@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1B5E20">
+  <title>Dashboard — Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <h2 id="familyName">Family Dues</h2>
+        <span>Dues Management</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
+        <a href="members.html" class="nav-item" data-page="members">Members</a>
+        <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
+        <a href="users.html" class="nav-item" data-page="users">Users</a>
+        <a href="#" id="logoutBtn" class="nav-item">Logout</a>
+      </nav>
+    </aside>
+
+    <div class="main-content">
+      <header class="top-header">
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+        <h1 class="page-title" style="margin:0;font-size:1.125rem;">Dashboard</h1>
+        <div class="header-user">
+          <div class="header-user-info">
+            <div id="userName" class="header-user-name"></div>
+            <div id="userRole" class="header-user-role"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <h2 id="welcomeMsg" class="page-title">Welcome</h2>
+        <p id="currentMonth" class="page-subtitle"></p>
+
+        <div id="personalDuesCard" class="card-grid"></div>
+        <div id="roleCards" class="card-grid"></div>
+
+        <div id="chartSection" class="card-section" style="display:none;">
+          <h3>Monthly Collections (Last 6 Months)</h3>
+          <div class="chart-container">
+            <canvas id="collectionsChart"></canvas>
+          </div>
+        </div>
+
+        <div id="quickActions" class="btn-group"></div>
+
+        <div id="memberHistorySection" class="card-section" style="display:none;">
+          <h3>Your Payment History (Last 12 Months)</h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Amount Due</th>
+                  <th>Amount Paid</th>
+                  <th>Channel</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="memberHistoryBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let session;
+    let chartInstance;
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      session = initPageLayout('dashboard');
+      if (!session) return;
+
+      document.getElementById('welcomeMsg').textContent = 'Welcome, ' + (session.memberName || session.username);
+      document.getElementById('currentMonth').textContent = getCurrentMonthLabel();
+
+      const result = await API.getDashboardData();
+      if (!result.success) {
+        showToast(result.error || 'Failed to load dashboard', 'error');
+        return;
+      }
+
+      renderDashboard(result.data, session.role);
+    });
+
+    function renderDashboard(data, role) {
+      const personalEl = document.getElementById('personalDuesCard');
+      if (data.memberDues) {
+        personalEl.innerHTML = `
+          <div class="card">
+            <div class="card-label">Your dues for ${data.month}</div>
+            <div class="card-value">${formatCurrency(data.memberDues.amount)}</div>
+            <div style="margin-top:8px;">${statusBadge(data.memberDues.status)}</div>
+          </div>`;
+      }
+
+      const roleCards = document.getElementById('roleCards');
+      const quickActions = document.getElementById('quickActions');
+
+      if (role === 'Admin' || role === 'Treasurer') {
+        const s = data.summary || {};
+        roleCards.innerHTML = `
+          <div class="card"><div class="card-label">Eligible Members</div><div class="card-value">${s.eligibleCount || 0}</div></div>
+          <div class="card"><div class="card-label">Members Paid</div><div class="card-value success">${s.paidCount || 0}</div></div>
+          <div class="card"><div class="card-label">Members Unpaid</div><div class="card-value danger">${s.unpaidCount || 0}</div></div>
+          <div class="card"><div class="card-label">Total Collected</div><div class="card-value accent">${formatCurrency(s.totalCollected)}</div></div>
+          <div class="card"><div class="card-label">Total Outstanding</div><div class="card-value danger">${formatCurrency(s.totalOutstanding)}</div></div>`;
+
+        quickActions.innerHTML = `
+          <a href="payments.html" class="btn btn-primary">Record Payment</a>
+          <a href="reports.html" class="btn btn-outline">View Reports</a>
+          <a href="members.html" class="btn btn-outline">Manage Members</a>`;
+
+        if (data.chartData) renderChart(data.chartData);
+      }
+
+      if (role === 'Secretary') {
+        roleCards.innerHTML = `
+          <div class="card"><div class="card-label">Active Members</div><div class="card-value">${data.activeCount || 0}</div></div>
+          <div class="card"><div class="card-label">Members with Exemptions</div><div class="card-value">${data.exemptCount || 0}</div></div>`;
+
+        quickActions.innerHTML = `
+          <a href="members.html" class="btn btn-primary">Add Member</a>
+          <a href="members.html" class="btn btn-outline">View Members</a>
+          <button id="sendRemindersBtn" class="btn btn-accent">Send Reminders</button>`;
+
+        document.getElementById('sendRemindersBtn').addEventListener('click', async function () {
+          if (!confirmAction('Send payment reminders to all unpaid members?')) return;
+          const res = await API.sendReminders();
+          showToast(res.success ? 'Reminders sent' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+        });
+      }
+
+      if (role === 'Member') {
+        quickActions.innerHTML = '';
+        renderMemberHistory(data.paymentHistory || []);
+      }
+    }
+
+    function renderChart(chartData) {
+      document.getElementById('chartSection').style.display = 'block';
+      const ctx = document.getElementById('collectionsChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: chartData.map(function (d) { return d.month.split(' ')[0]; }),
+          datasets: [{
+            label: 'Collected (GHS)',
+            data: chartData.map(function (d) { return d.collected; }),
+            backgroundColor: '#1B5E20',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { callback: function (v) { return 'GHS ' + v; } } }
+          }
+        }
+      });
+    }
+
+    function renderMemberHistory(payments) {
+      document.getElementById('memberHistorySection').style.display = 'block';
+      const tbody = document.getElementById('memberHistoryBody');
+      const months = getMonthOptions(12);
+      const paidMonths = {};
+      payments.forEach(function (p) { paidMonths[p.Month] = p; });
+
+      tbody.innerHTML = months.map(function (month) {
+        const p = paidMonths[month];
+        if (p) {
+          return `<tr>
+            <td>${month}</td>
+            <td>${formatCurrency(p.AmountDue)}</td>
+            <td>${formatCurrency(p.AmountPaid)}</td>
+            <td>${p.PaymentChannel || ''}</td>
+            <td>${formatDate(p.PaymentDate)}</td>
+            <td>${statusBadge('PAID')}</td>
+          </tr>`;
+        }
+        return `<tr>
+          <td>${month}</td>
+          <td>—</td><td>—</td><td>—</td><td>—</td>
+          <td>${statusBadge('UNPAID')}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty-state">No records found</td></tr>';
+      refreshResponsiveTables();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1B5E20">
+  <title>Reports — Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <h2 id="familyName">Family Dues</h2>
+        <span>Dues Management</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
+        <a href="members.html" class="nav-item" data-page="members">Members</a>
+        <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
+        <a href="users.html" class="nav-item" data-page="users">Users</a>
+        <a href="#" id="logoutBtn" class="nav-item">Logout</a>
+      </nav>
+    </aside>
+
+    <div class="main-content">
+      <header class="top-header">
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+        <h1 class="page-title" style="margin:0;font-size:1.125rem;">Reports</h1>
+        <div class="header-user">
+          <div class="header-user-info">
+            <div id="userName" class="header-user-name"></div>
+            <div id="userRole" class="header-user-role"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="monthly">Monthly Summary</button>
+          <button class="tab-btn" data-tab="history">Member History</button>
+          <button class="tab-btn" data-tab="overdue">Overdue Members</button>
+          <button class="tab-btn" data-tab="yearend">Year-End Summary</button>
+        </div>
+
+        <!-- Tab 1: Monthly Summary -->
+        <div id="tab-monthly" class="tab-panel active">
+          <div class="table-toolbar">
+            <select id="monthlyMonth" class="form-control" style="width:auto;"></select>
+            <div>
+              <button class="btn btn-outline btn-sm" onclick="exportMonthlyCSV()">Export to CSV</button>
+              <button class="btn btn-outline btn-sm" onclick="printSection('monthlyReportContent')">Print</button>
+            </div>
+          </div>
+          <div id="monthlyReportContent">
+            <div id="monthlyCards" class="card-grid"></div>
+            <div class="card-section table-paid">
+              <h3>Paid Members</h3>
+              <div class="table-wrapper">
+                <table><thead><tr><th>Name</th><th>Email</th><th>Dues Amount</th></tr></thead>
+                <tbody id="paidMembersBody"></tbody></table>
+              </div>
+            </div>
+            <div class="card-section table-unpaid">
+              <h3>Unpaid Members</h3>
+              <div class="table-wrapper">
+                <table><thead><tr><th>Name</th><th>Email</th><th>Amount Due</th><th>Action</th></tr></thead>
+                <tbody id="unpaidMembersBody"></tbody></table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Member History -->
+        <div id="tab-history" class="tab-panel">
+          <div class="table-toolbar">
+            <select id="historyMember" class="form-control" style="width:auto;min-width:240px;"></select>
+            <button class="btn btn-outline btn-sm" onclick="exportHistoryCSV()">Export to CSV</button>
+          </div>
+          <div id="historySummary" class="card-grid"></div>
+          <div class="card-section">
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Month</th><th>Amount Due</th><th>Amount Paid</th><th>Channel</th><th>Date</th><th>Status</th></tr></thead>
+                <tbody id="historyBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Overdue Members -->
+        <div id="tab-overdue" class="tab-panel">
+          <div class="table-toolbar">
+            <select id="overdueMonth" class="form-control" style="width:auto;"></select>
+            <div>
+              <button id="remindAllBtn" class="btn btn-accent btn-sm">Send Reminder to All</button>
+              <button class="btn btn-outline btn-sm" onclick="exportOverdueCSV()">Export to CSV</button>
+            </div>
+          </div>
+          <div class="card-section">
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Amount Overdue</th><th>Months Overdue</th></tr></thead>
+                <tbody id="overdueBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Year-End Summary -->
+        <div id="tab-yearend" class="tab-panel">
+          <div class="table-toolbar">
+            <select id="yearPicker" class="form-control" style="width:auto;"></select>
+            <div>
+              <button class="btn btn-outline btn-sm" onclick="exportYearCSV()">Export to CSV</button>
+              <button class="btn btn-outline btn-sm" onclick="printSection('yearEndContent')">Print</button>
+            </div>
+          </div>
+          <div id="yearEndContent" class="card-section">
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Name</th><th>Months Paid</th><th>Months Missed</th><th>Total Paid</th><th>Compliance %</th></tr></thead>
+                <tbody id="yearEndBody"></tbody>
+                <tfoot id="yearEndFoot"></tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let session;
+    let monthlyData = {};
+    let historyData = {};
+    let overdueData = [];
+    let yearData = {};
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      session = initPageLayout('reports', ['Admin', 'Treasurer']);
+      if (!session) return;
+
+      const months = getMonthOptions(24);
+      populateSelect(document.getElementById('monthlyMonth'), months);
+      populateSelect(document.getElementById('overdueMonth'), months);
+      populateSelect(document.getElementById('yearPicker'), getYearOptions(5).map(String));
+
+      document.querySelectorAll('.tab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+          document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+          btn.classList.add('active');
+          document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        });
+      });
+
+      document.getElementById('monthlyMonth').addEventListener('change', loadMonthlySummary);
+      document.getElementById('historyMember').addEventListener('change', loadMemberHistory);
+      document.getElementById('overdueMonth').addEventListener('change', loadOverdue);
+      document.getElementById('yearPicker').addEventListener('change', loadYearEnd);
+      document.getElementById('remindAllBtn').addEventListener('click', remindAllOverdue);
+
+      const membersResult = await API.getMembers('all');
+      if (membersResult.success) {
+        populateSelect(document.getElementById('historyMember'), membersResult.data.filter(function (m) {
+          return m.Status !== 'Inactive';
+        }), 'MemberID', 'FullName', 'Select member...');
+      }
+
+      await loadMonthlySummary();
+      await loadOverdue();
+      await loadYearEnd();
+    });
+
+    async function loadMonthlySummary() {
+      const month = document.getElementById('monthlyMonth').value;
+      const result = await API.getMonthlySummary(month);
+      if (!result.success) { showToast(result.error, 'error'); return; }
+      monthlyData = result.data;
+
+      document.getElementById('monthlyCards').innerHTML = `
+        <div class="card"><div class="card-label">Eligible</div><div class="card-value">${monthlyData.eligibleCount}</div></div>
+        <div class="card"><div class="card-label">Paid</div><div class="card-value success">${monthlyData.paidCount}</div></div>
+        <div class="card"><div class="card-label">Unpaid</div><div class="card-value danger">${monthlyData.unpaidCount}</div></div>
+        <div class="card"><div class="card-label">Collected</div><div class="card-value accent">${formatCurrency(monthlyData.totalCollected)}</div></div>
+        <div class="card"><div class="card-label">Outstanding</div><div class="card-value danger">${formatCurrency(monthlyData.totalOutstanding)}</div></div>`;
+
+      const paidBody = document.getElementById('paidMembersBody');
+      paidBody.innerHTML = (monthlyData.paidMembers || []).map(function (m) {
+        return `<tr><td>${m.FullName}</td><td>${m.Email || ''}</td><td>${formatCurrency(m.DuesAmount)}</td></tr>`;
+      }).join('') || '<tr><td colspan="3" class="empty-state">No records found</td></tr>';
+
+      const unpaidBody = document.getElementById('unpaidMembersBody');
+      unpaidBody.innerHTML = (monthlyData.unpaidMembers || []).map(function (m) {
+        return `<tr>
+          <td>${m.FullName}</td><td>${m.Email || ''}</td><td>${formatCurrency(m.DuesAmount)}</td>
+          <td><button class="btn btn-sm btn-accent" onclick="sendReminder('${m.MemberID}')">Send Reminder</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="4" class="empty-state">No records found</td></tr>';
+      refreshResponsiveTables();
+    }
+
+    async function sendReminder(memberId) {
+      const month = document.getElementById('monthlyMonth').value;
+      const result = await API.sendReminderToMember(memberId, month);
+      showToast(result.success ? 'Reminder sent' : result.error, result.success ? 'success' : 'error');
+    }
+
+    async function loadMemberHistory() {
+      const memberId = document.getElementById('historyMember').value;
+      if (!memberId) return;
+      const result = await API.getMemberHistory(memberId);
+      if (!result.success) { showToast(result.error, 'error'); return; }
+      historyData = result.data;
+
+      document.getElementById('historySummary').innerHTML = `
+        <div class="card"><div class="card-label">Total Paid</div><div class="card-value accent">${formatCurrency(historyData.totalPaid)}</div></div>
+        <div class="card"><div class="card-label">Months Missed</div><div class="card-value danger">${historyData.monthsMissed}</div></div>
+        <div class="card"><div class="card-label">Compliance</div><div class="card-value ${complianceClass(historyData.compliance)}">${historyData.compliance}%</div></div>`;
+
+      document.getElementById('historyBody').innerHTML = (historyData.payments || []).map(function (p) {
+        return `<tr>
+          <td>${p.Month}</td><td>${formatCurrency(p.AmountDue)}</td><td>${formatCurrency(p.AmountPaid)}</td>
+          <td>${p.PaymentChannel}</td><td>${formatDate(p.PaymentDate)}</td><td>${statusBadge('PAID')}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty-state">No records found</td></tr>';
+      refreshResponsiveTables();
+    }
+
+    async function loadOverdue() {
+      const month = document.getElementById('overdueMonth').value;
+      const result = await API.getOverdueMembers(month);
+      if (!result.success) { showToast(result.error, 'error'); return; }
+      overdueData = result.data.overdueMembers || [];
+
+      document.getElementById('overdueBody').innerHTML = overdueData.map(function (m) {
+        return `<tr>
+          <td>${m.FullName}</td><td>${m.Email || ''}</td><td>${m.Phone || ''}</td>
+          <td>${formatCurrency(m.AmountOverdue)}</td><td>${m.MonthsOverdue}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty-state">No records found</td></tr>';
+      refreshResponsiveTables();
+    }
+
+    async function remindAllOverdue() {
+      if (!confirmAction('Send reminders to all overdue members?')) return;
+      for (const m of overdueData) {
+        await API.sendReminderToMember(m.MemberID, document.getElementById('overdueMonth').value);
+      }
+      showToast('Reminders sent to all overdue members');
+    }
+
+    async function loadYearEnd() {
+      const year = document.getElementById('yearPicker').value;
+      const result = await API.getYearEndSummary(year);
+      if (!result.success) { showToast(result.error, 'error'); return; }
+      yearData = result.data;
+
+      document.getElementById('yearEndBody').innerHTML = (yearData.members || []).map(function (m) {
+        return `<tr>
+          <td>${m.FullName}</td><td>${m.monthsPaid}</td><td>${m.monthsMissed}</td>
+          <td>${formatCurrency(m.totalPaid)}</td>
+          <td class="${complianceClass(m.compliance)}">${m.compliance}%</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty-state">No records found</td></tr>';
+
+      document.getElementById('yearEndFoot').innerHTML = `<tr style="font-weight:700;background:#f5f5f5;">
+        <td>Family Totals</td><td>—</td><td>—</td>
+        <td>${formatCurrency(yearData.totalCollected)}</td>
+        <td class="${complianceClass(yearData.familyCompliance)}">${yearData.familyCompliance}%</td>
+      </tr>`;
+      refreshResponsiveTables();
+    }
+
+    function exportMonthlyCSV() {
+      const rows = [];
+      (monthlyData.paidMembers || []).forEach(function (m) {
+        rows.push({ Status: 'Paid', Name: m.FullName, Email: m.Email, Amount: m.DuesAmount });
+      });
+      (monthlyData.unpaidMembers || []).forEach(function (m) {
+        rows.push({ Status: 'Unpaid', Name: m.FullName, Email: m.Email, Amount: m.DuesAmount });
+      });
+      exportToCSV(rows, 'monthly-summary.csv');
+    }
+
+    function exportHistoryCSV() {
+      exportToCSV((historyData.payments || []).map(function (p) {
+        return { Month: p.Month, AmountDue: p.AmountDue, AmountPaid: p.AmountPaid, Channel: p.PaymentChannel, Date: formatDate(p.PaymentDate) };
+      }), 'member-history.csv');
+    }
+
+    function exportOverdueCSV() {
+      exportToCSV(overdueData.map(function (m) {
+        return { Name: m.FullName, Email: m.Email, Phone: m.Phone, AmountOverdue: m.AmountOverdue, MonthsOverdue: m.MonthsOverdue };
+      }), 'overdue-members.csv');
+    }
+
+    function exportYearCSV() {
+      exportToCSV((yearData.members || []).map(function (m) {
+        return { Name: m.FullName, MonthsPaid: m.monthsPaid, MonthsMissed: m.monthsMissed, TotalPaid: m.totalPaid, Compliance: m.compliance + '%' };
+      }), 'year-end-summary.csv');
+    }
+  </script>
+</body>
+</html>

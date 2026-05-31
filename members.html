@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1B5E20">
+  <title>Members — Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <h2 id="familyName">Family Dues</h2>
+        <span>Dues Management</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
+        <a href="members.html" class="nav-item" data-page="members">Members</a>
+        <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
+        <a href="users.html" class="nav-item" data-page="users">Users</a>
+        <a href="#" id="logoutBtn" class="nav-item">Logout</a>
+      </nav>
+    </aside>
+
+    <div class="main-content">
+      <header class="top-header">
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+        <h1 class="page-title" style="margin:0;font-size:1.125rem;">Members</h1>
+        <div class="header-user">
+          <div class="header-user-info">
+            <div id="userName" class="header-user-name"></div>
+            <div id="userRole" class="header-user-role"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <div class="table-toolbar">
+          <div class="table-filters">
+            <input type="text" id="searchInput" class="form-control search-input" placeholder="Search members...">
+            <select id="statusFilter" class="form-control" style="width:auto;">
+              <option value="all">All</option>
+              <option value="Active">Active</option>
+              <option value="Exempt">Exempt</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          <div class="toolbar-actions">
+            <button id="exportBtn" class="btn btn-outline btn-sm">Export to CSV</button>
+            <button id="addMemberBtn" class="btn btn-primary btn-sm">+ Add Member</button>
+          </div>
+        </div>
+
+        <div class="card-section">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th data-sort="MemberID">Member ID</th>
+                  <th data-sort="FullName">Full Name</th>
+                  <th data-sort="Email">Email</th>
+                  <th data-sort="Phone">Phone</th>
+                  <th data-sort="Status">Status</th>
+                  <th data-sort="DuesAmount">Dues Amount</th>
+                  <th data-sort="ExemptionReason">Exemption</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="membersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div id="memberModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="memberModalTitle">Add Member</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="memberForm">
+        <div class="modal-body">
+          <input type="hidden" id="editMemberId">
+          <div class="form-group">
+            <label for="fullName" class="required">Full Name</label>
+            <input type="text" id="fullName" class="form-control" required>
+            <div id="fullNameError" class="form-error"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="email" class="required">Email</label>
+              <input type="email" id="email" class="form-control" required>
+              <div id="emailError" class="form-error"></div>
+            </div>
+            <div class="form-group">
+              <label for="phone">Phone</label>
+              <input type="tel" id="phone" class="form-control">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="dateOfBirth">Date of Birth</label>
+              <input type="date" id="dateOfBirth" class="form-control">
+            </div>
+            <div class="form-group">
+              <label for="duesAmount" class="required">Dues Amount (GHS)</label>
+              <input type="number" id="duesAmount" class="form-control" min="0" step="0.01" required>
+              <div id="duesAmountError" class="form-error"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="status">Status</label>
+              <select id="status" class="form-control">
+                <option value="Active">Active</option>
+                <option value="Exempt">Exempt</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="exemptionReason">Exemption Reason</label>
+              <select id="exemptionReason" class="form-control">
+                <option value="none">None</option>
+                <option value="Under18">Under 18</option>
+                <option value="Unemployed">Unemployed</option>
+                <option value="Elderly">Elderly</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="notes">Notes</label>
+            <textarea id="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let session;
+    let allMembers = [];
+    let sortKey = 'FullName';
+    let sortDir = 'asc';
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      session = initPageLayout('members', ['Admin', 'Secretary']);
+      if (!session) return;
+
+      setupModalClose('memberModal');
+      document.querySelector('#memberModal .modal-close-btn').addEventListener('click', function () {
+        closeModal('memberModal');
+      });
+
+      document.getElementById('addMemberBtn').addEventListener('click', openAddModal);
+      document.getElementById('memberForm').addEventListener('submit', saveMember);
+      document.getElementById('searchInput').addEventListener('input', debounce(renderTable, 300));
+      document.getElementById('statusFilter').addEventListener('change', loadMembers);
+      document.getElementById('exportBtn').addEventListener('click', exportMembers);
+
+      document.querySelectorAll('th[data-sort]').forEach(function (th) {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', function () {
+          const key = th.dataset.sort;
+          if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+          else { sortKey = key; sortDir = 'asc'; }
+          renderTable();
+        });
+      });
+
+      await loadMembers();
+    });
+
+    async function loadMembers() {
+      const filter = document.getElementById('statusFilter').value;
+      const result = await API.getMembers(filter);
+      if (!result.success) {
+        showToast(result.error || 'Failed to load members', 'error');
+        return;
+      }
+      allMembers = result.data;
+      renderTable();
+    }
+
+    function renderTable() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      let filtered = allMembers.filter(function (m) {
+        return !search ||
+          (m.FullName || '').toLowerCase().includes(search) ||
+          (m.MemberID || '').toLowerCase().includes(search) ||
+          (m.Email || '').toLowerCase().includes(search);
+      });
+
+      filtered = sortTableData(filtered, sortKey, sortDir);
+      const tbody = document.getElementById('membersBody');
+      const isAdmin = session.role === 'Admin';
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No records found</td></tr>';
+        refreshResponsiveTables();
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(function (m) {
+        const exempt = m.ExemptionReason === 'none' ? 'None' : m.ExemptionReason;
+        return `<tr>
+          <td>${m.MemberID}</td>
+          <td>${m.FullName}</td>
+          <td>${m.Email || ''}</td>
+          <td>${m.Phone || ''}</td>
+          <td>${statusBadge(m.Status)}</td>
+          <td>${formatCurrency(m.DuesAmount)}</td>
+          <td>${exempt}</td>
+          <td>
+            <button class="btn btn-sm btn-outline" onclick="editMember('${m.MemberID}')">Edit</button>
+            ${isAdmin && m.Status !== 'Inactive' ? `<button class="btn btn-sm btn-danger" onclick="deactivateMember('${m.MemberID}','${m.FullName.replace(/'/g, "\\'")}')">Deactivate</button>` : ''}
+          </td>
+        </tr>`;
+      }).join('');
+      refreshResponsiveTables();
+    }
+
+    function openAddModal() {
+      document.getElementById('memberModalTitle').textContent = 'Add Member';
+      document.getElementById('editMemberId').value = '';
+      document.getElementById('memberForm').reset();
+      clearFormErrors('memberForm');
+      openModal('memberModal');
+    }
+
+    async function editMember(memberId) {
+      const result = await API.getMemberById(memberId);
+      if (!result.success) {
+        showToast(result.error, 'error');
+        return;
+      }
+      const m = result.data;
+      document.getElementById('memberModalTitle').textContent = 'Edit Member';
+      document.getElementById('editMemberId').value = m.MemberID;
+      document.getElementById('fullName').value = m.FullName || '';
+      document.getElementById('email').value = m.Email || '';
+      document.getElementById('phone').value = m.Phone || '';
+      document.getElementById('dateOfBirth').value = m.DateOfBirth ? String(m.DateOfBirth).substring(0, 10) : '';
+      document.getElementById('duesAmount').value = m.DuesAmount || 0;
+      document.getElementById('status').value = m.Status || 'Active';
+      document.getElementById('exemptionReason').value = m.ExemptionReason || 'none';
+      document.getElementById('notes').value = m.Notes || '';
+      openModal('memberModal');
+    }
+
+    async function saveMember(e) {
+      e.preventDefault();
+      clearFormErrors('memberForm');
+
+      const valid = validateRequired([
+        { id: 'fullName', message: 'Full name is required' },
+        { id: 'email', message: 'Email is required' },
+        { id: 'duesAmount', message: 'Dues amount is required' }
+      ]);
+      if (!valid) return;
+
+      const data = {
+        fullName: document.getElementById('fullName').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        dateOfBirth: document.getElementById('dateOfBirth').value,
+        duesAmount: document.getElementById('duesAmount').value,
+        status: document.getElementById('status').value,
+        exemptionReason: document.getElementById('exemptionReason').value,
+        notes: document.getElementById('notes').value.trim()
+      };
+
+      const editId = document.getElementById('editMemberId').value;
+      let result;
+      if (editId) {
+        data.memberId = editId;
+        result = await API.updateMember(data);
+      } else {
+        result = await API.addMember(data);
+      }
+
+      if (result.success) {
+        showToast(editId ? 'Member updated' : 'Member added');
+        closeModal('memberModal');
+        await loadMembers();
+      } else {
+        showToast(result.error || 'Save failed', 'error');
+      }
+    }
+
+    async function deactivateMember(memberId, name) {
+      if (!confirmAction('Deactivate member "' + name + '"? This cannot be easily undone.')) return;
+      const result = await API.deleteMember(memberId);
+      if (result.success) {
+        showToast('Member deactivated');
+        await loadMembers();
+      } else {
+        showToast(result.error, 'error');
+      }
+    }
+
+    function exportMembers() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const rows = allMembers.filter(function (m) {
+        return !search ||
+          (m.FullName || '').toLowerCase().includes(search) ||
+          (m.MemberID || '').toLowerCase().includes(search);
+      }).map(function (m) {
+        return {
+          MemberID: m.MemberID,
+          FullName: m.FullName,
+          Email: m.Email,
+          Phone: m.Phone,
+          Status: m.Status,
+          DuesAmount: m.DuesAmount,
+          ExemptionReason: m.ExemptionReason
+        };
+      });
+      exportToCSV(rows, 'members-export.csv');
+    }
+  </script>
+</body>
+</html>

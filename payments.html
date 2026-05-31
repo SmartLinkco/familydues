@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1B5E20">
+  <title>Payments — Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <h2 id="familyName">Family Dues</h2>
+        <span>Dues Management</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
+        <a href="members.html" class="nav-item" data-page="members">Members</a>
+        <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
+        <a href="users.html" class="nav-item" data-page="users">Users</a>
+        <a href="#" id="logoutBtn" class="nav-item">Logout</a>
+      </nav>
+    </aside>
+
+    <div class="main-content">
+      <header class="top-header">
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+        <h1 class="page-title" style="margin:0;font-size:1.125rem;">Payments</h1>
+        <div class="header-user">
+          <div class="header-user-info">
+            <div id="userName" class="header-user-name"></div>
+            <div id="userRole" class="header-user-role"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <div class="card-section">
+          <h3>Record Payment</h3>
+          <form id="paymentForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="memberSelect" class="required">Select Member</label>
+                <select id="memberSelect" class="form-control" required></select>
+                <div id="memberSelectError" class="form-error"></div>
+              </div>
+              <div class="form-group">
+                <label for="amountDue">Dues Amount</label>
+                <input type="text" id="amountDue" class="form-control" readonly>
+              </div>
+              <div class="form-group">
+                <label for="paymentMonth" class="required">Month</label>
+                <select id="paymentMonth" class="form-control" required></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="amountPaid" class="required">Amount Paid</label>
+                <input type="number" id="amountPaid" class="form-control" min="0" step="0.01" required>
+                <div id="amountPaidError" class="form-error"></div>
+              </div>
+              <div class="form-group">
+                <label for="paymentChannel" class="required">Payment Channel</label>
+                <select id="paymentChannel" class="form-control">
+                  <option value="Cash">Cash</option>
+                  <option value="MoMo">MoMo</option>
+                </select>
+              </div>
+              <div class="form-group" id="momoRefGroup" style="display:none;">
+                <label for="momoReference" class="required">MoMo Reference Number</label>
+                <input type="text" id="momoReference" class="form-control">
+                <div id="momoReferenceError" class="form-error"></div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="paymentNotes">Notes</label>
+              <textarea id="paymentNotes" class="form-control" rows="2"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Record Payment</button>
+          </form>
+        </div>
+
+        <div class="card-section">
+          <div class="table-toolbar">
+            <h3 style="margin:0;">Payment Log</h3>
+            <div class="table-filters">
+              <select id="filterMonth" class="form-control" style="width:auto;">
+                <option value="">All Months</option>
+              </select>
+              <select id="filterMember" class="form-control" style="width:auto;">
+                <option value="">All Members</option>
+              </select>
+              <select id="filterChannel" class="form-control" style="width:auto;">
+                <option value="">All Channels</option>
+                <option value="MoMo">MoMo</option>
+                <option value="Cash">Cash</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Payment ID</th>
+                  <th>Member</th>
+                  <th>Month</th>
+                  <th>Amount</th>
+                  <th>Channel</th>
+                  <th>MoMo Ref</th>
+                  <th>Date</th>
+                  <th>Recorded By</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="paymentsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let session;
+    let eligibleMembers = [];
+    let allPayments = [];
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      session = initPageLayout('payments', ['Admin', 'Treasurer']);
+      if (!session) return;
+
+      populateSelect(document.getElementById('paymentMonth'), getMonthOptions(12));
+      const filterMonthEl = document.getElementById('filterMonth');
+      populateSelect(filterMonthEl, getMonthOptions(24), null, null, 'All Months');
+
+      document.getElementById('paymentChannel').addEventListener('change', toggleMomoRef);
+      document.getElementById('memberSelect').addEventListener('change', onMemberSelect);
+      document.getElementById('paymentForm').addEventListener('submit', recordPayment);
+      document.getElementById('filterMonth').addEventListener('change', loadPayments);
+      document.getElementById('filterMember').addEventListener('change', loadPayments);
+      document.getElementById('filterChannel').addEventListener('change', loadPayments);
+
+      await loadEligibleMembers();
+      await loadPayments();
+    });
+
+    async function loadEligibleMembers() {
+      const result = await API.getMembers('Active');
+      if (!result.success) return;
+      eligibleMembers = result.data.filter(function (m) {
+        return m.Status === 'Active' && m.ExemptionReason === 'none';
+      });
+      populateSelect(document.getElementById('memberSelect'), eligibleMembers, 'MemberID', 'FullName', 'Select a member...');
+      populateSelect(document.getElementById('filterMember'), [{ MemberID: '', FullName: 'All Members' }].concat(
+        result.data.map(function (m) { return m; })
+      ), 'MemberID', 'FullName');
+    }
+
+    function onMemberSelect() {
+      const id = document.getElementById('memberSelect').value;
+      const member = eligibleMembers.find(function (m) { return m.MemberID === id; });
+      const dues = member ? parseFloat(member.DuesAmount) || 0 : 0;
+      document.getElementById('amountDue').value = formatCurrency(dues);
+      document.getElementById('amountPaid').value = dues;
+    }
+
+    function toggleMomoRef() {
+      const isMomo = document.getElementById('paymentChannel').value === 'MoMo';
+      document.getElementById('momoRefGroup').style.display = isMomo ? 'block' : 'none';
+    }
+
+    async function recordPayment(e) {
+      e.preventDefault();
+      clearFormErrors('paymentForm');
+
+      const memberId = document.getElementById('memberSelect').value;
+      if (!memberId) {
+        document.getElementById('memberSelect').classList.add('error');
+        showToast('Please select a member', 'error');
+        return;
+      }
+
+      const channel = document.getElementById('paymentChannel').value;
+      if (channel === 'MoMo' && !document.getElementById('momoReference').value.trim()) {
+        document.getElementById('momoReference').classList.add('error');
+        document.getElementById('momoReferenceError').textContent = 'MoMo reference is required';
+        document.getElementById('momoReferenceError').classList.add('visible');
+        return;
+      }
+
+      const data = {
+        memberId: memberId,
+        month: document.getElementById('paymentMonth').value,
+        amountPaid: document.getElementById('amountPaid').value,
+        paymentChannel: channel,
+        momoReference: document.getElementById('momoReference').value.trim(),
+        notes: document.getElementById('paymentNotes').value.trim()
+      };
+
+      const result = await API.recordPayment(data);
+      if (result.success) {
+        showToast('Payment recorded successfully');
+        document.getElementById('paymentForm').reset();
+        document.getElementById('amountDue').value = '';
+        toggleMomoRef();
+        await loadPayments();
+      } else {
+        showToast(result.error || 'Failed to record payment', 'error');
+      }
+    }
+
+    async function loadPayments() {
+      const filters = {};
+      const month = document.getElementById('filterMonth').value;
+      const member = document.getElementById('filterMember').value;
+      const channel = document.getElementById('filterChannel').value;
+      if (month) filters.month = month;
+      if (member) filters.memberId = member;
+      if (channel) filters.channel = channel;
+
+      const result = await API.getPayments(filters);
+      if (!result.success) {
+        showToast(result.error, 'error');
+        return;
+      }
+      allPayments = result.data;
+      renderPayments();
+    }
+
+    function renderPayments() {
+      const tbody = document.getElementById('paymentsBody');
+      const isAdmin = session.role === 'Admin';
+
+      if (allPayments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No records found</td></tr>';
+        refreshResponsiveTables();
+        return;
+      }
+
+      tbody.innerHTML = allPayments.map(function (p) {
+        return `<tr>
+          <td>${p.PaymentID}</td>
+          <td>${p.MemberName}</td>
+          <td>${p.Month}</td>
+          <td>${formatCurrency(p.AmountPaid)}</td>
+          <td>${p.PaymentChannel}</td>
+          <td>${p.MoMoReference || '—'}</td>
+          <td>${formatDate(p.PaymentDate)}</td>
+          <td>${p.RecordedBy}</td>
+          <td>${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deletePayment('${p.PaymentID}')">Delete</button>` : '—'}</td>
+        </tr>`;
+      }).join('');
+      refreshResponsiveTables();
+    }
+
+    async function deletePayment(paymentId) {
+      const reason = prompt('Enter reason for deleting payment ' + paymentId + ':');
+      if (!reason) return;
+      const result = await API.deletePayment(paymentId, reason);
+      if (result.success) {
+        showToast('Payment deleted');
+        await loadPayments();
+      } else {
+        showToast(result.error, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
