@@ -48,9 +48,9 @@
         <div id="tab-monthly" class="tab-panel active">
           <div class="table-toolbar">
             <select id="monthlyMonth" class="form-control" style="width:auto;"></select>
-            <div>
+            <div class="toolbar-actions">
               <button class="btn btn-outline btn-sm" onclick="exportMonthlyCSV()">Export to CSV</button>
-              <button class="btn btn-outline btn-sm" onclick="printSection('monthlyReportContent')">Print</button>
+              <button class="btn btn-outline btn-sm" onclick="printMonthlyReport()">Print</button>
             </div>
           </div>
           <div id="monthlyReportContent">
@@ -76,7 +76,10 @@
         <div id="tab-history" class="tab-panel">
           <div class="table-toolbar">
             <select id="historyMember" class="form-control" style="width:auto;min-width:240px;"></select>
-            <button class="btn btn-outline btn-sm" onclick="exportHistoryCSV()">Export to CSV</button>
+            <div class="toolbar-actions">
+              <button class="btn btn-outline btn-sm" onclick="exportHistoryCSV()">Export to CSV</button>
+              <button class="btn btn-outline btn-sm" onclick="printHistoryReport()">Print</button>
+            </div>
           </div>
           <div id="historySummary" class="card-grid"></div>
           <div class="card-section">
@@ -93,9 +96,10 @@
         <div id="tab-overdue" class="tab-panel">
           <div class="table-toolbar">
             <select id="overdueMonth" class="form-control" style="width:auto;"></select>
-            <div>
+            <div class="toolbar-actions">
               <button id="remindAllBtn" class="btn btn-accent btn-sm">Send Reminder to All</button>
               <button class="btn btn-outline btn-sm" onclick="exportOverdueCSV()">Export to CSV</button>
+              <button class="btn btn-outline btn-sm" onclick="printOverdueReport()">Print</button>
             </div>
           </div>
           <div class="card-section">
@@ -112,9 +116,9 @@
         <div id="tab-yearend" class="tab-panel">
           <div class="table-toolbar">
             <select id="yearPicker" class="form-control" style="width:auto;"></select>
-            <div>
+            <div class="toolbar-actions">
               <button class="btn btn-outline btn-sm" onclick="exportYearCSV()">Export to CSV</button>
-              <button class="btn btn-outline btn-sm" onclick="printSection('yearEndContent')">Print</button>
+              <button class="btn btn-outline btn-sm" onclick="printYearEndReport()">Print</button>
             </div>
           </div>
           <div id="yearEndContent" class="card-section">
@@ -304,6 +308,127 @@
       exportToCSV((yearData.members || []).map(function (m) {
         return { Name: m.FullName, MonthsPaid: m.monthsPaid, MonthsMissed: m.monthsMissed, TotalPaid: m.totalPaid, Compliance: m.compliance + '%' };
       }), 'year-end-summary.csv');
+    }
+
+    function printMonthlyReport() {
+      const month = document.getElementById('monthlyMonth').value;
+      const stats = buildPrintStats([
+        { label: 'Eligible', value: String(monthlyData.eligibleCount || 0) },
+        { label: 'Paid', value: String(monthlyData.paidCount || 0), className: 'success' },
+        { label: 'Unpaid', value: String(monthlyData.unpaidCount || 0), className: 'danger' },
+        { label: 'Collected', value: formatCurrency(monthlyData.totalCollected), className: 'accent' },
+        { label: 'Outstanding', value: formatCurrency(monthlyData.totalOutstanding), className: 'danger' }
+      ]);
+
+      const paidRows = (monthlyData.paidMembers || []).map(function (m) {
+        return [m.FullName, m.Email || '—', formatCurrency(m.DuesAmount)];
+      });
+      const unpaidRows = (monthlyData.unpaidMembers || []).map(function (m) {
+        return [m.FullName, m.Email || '—', formatCurrency(m.DuesAmount)];
+      });
+
+      const bodyHtml =
+        stats +
+        '<div class="print-section"><h3>Paid Members (' + (monthlyData.paidCount || 0) + ')</h3>' +
+        buildPrintTable(['Name', 'Email', 'Amount'], paidRows, { headClass: 'success-head', colClasses: ['', '', 'num'] }) +
+        '</div>' +
+        '<div class="print-section"><h3>Unpaid Members (' + (monthlyData.unpaidCount || 0) + ')</h3>' +
+        buildPrintTable(['Name', 'Email', 'Amount Due'], unpaidRows, { headClass: 'danger-head', colClasses: ['', '', 'num'] }) +
+        '</div>';
+
+      printReport({ title: 'Monthly Dues Summary', subtitle: month, bodyHtml: bodyHtml });
+    }
+
+    function printHistoryReport() {
+      const memberId = document.getElementById('historyMember').value;
+      if (!memberId || !historyData.member) {
+        showToast('Please select a member first', 'error');
+        return;
+      }
+
+      const member = historyData.member;
+      const stats = buildPrintStats([
+        { label: 'Total Paid', value: formatCurrency(historyData.totalPaid), className: 'accent' },
+        { label: 'Months Paid', value: String(historyData.monthsPaid || 0), className: 'success' },
+        { label: 'Months Missed', value: String(historyData.monthsMissed || 0), className: 'danger' },
+        { label: 'Compliance', value: (historyData.compliance || 0) + '%', className: compliancePrintClass(historyData.compliance) }
+      ]);
+
+      const rows = (historyData.payments || []).map(function (p) {
+        return [p.Month, formatCurrency(p.AmountDue), formatCurrency(p.AmountPaid), p.PaymentChannel || '—', formatDate(p.PaymentDate), 'PAID'];
+      });
+
+      const bodyHtml =
+        '<div class="print-member-banner"><strong>Member:</strong> ' + escapeHtml(member.FullName) +
+        ' &nbsp;|&nbsp; <strong>ID:</strong> ' + escapeHtml(member.MemberID) +
+        (member.Email ? ' &nbsp;|&nbsp; <strong>Email:</strong> ' + escapeHtml(member.Email) : '') +
+        '</div>' +
+        stats +
+        '<div class="print-section"><h3>Payment History</h3>' +
+        buildPrintTable(['Month', 'Amount Due', 'Amount Paid', 'Channel', 'Date', 'Status'], rows, {
+          colClasses: ['', 'num', 'num', '', '', '']
+        }) +
+        '</div>';
+
+      printReport({ title: 'Member Payment History', subtitle: member.FullName, bodyHtml: bodyHtml });
+    }
+
+    function printOverdueReport() {
+      const month = document.getElementById('overdueMonth').value;
+      const totalOverdue = overdueData.reduce(function (sum, m) {
+        return sum + (parseFloat(m.AmountOverdue) || 0);
+      }, 0);
+
+      const stats = buildPrintStats([
+        { label: 'Overdue Members', value: String(overdueData.length), className: 'danger' },
+        { label: 'Total Overdue', value: formatCurrency(totalOverdue), className: 'danger' },
+        { label: 'Period', value: month, className: '' }
+      ]);
+
+      const rows = overdueData.map(function (m) {
+        return [m.FullName, m.Email || '—', m.Phone || '—', formatCurrency(m.AmountOverdue), String(m.MonthsOverdue)];
+      });
+
+      const bodyHtml =
+        stats +
+        '<div class="print-section"><h3>Overdue Members</h3>' +
+        buildPrintTable(['Name', 'Email', 'Phone', 'Amount Overdue', 'Months Overdue'], rows, {
+          headClass: 'danger-head',
+          colClasses: ['', '', '', 'num', 'num']
+        }) +
+        '</div>';
+
+      printReport({ title: 'Overdue Dues Report', subtitle: month, bodyHtml: bodyHtml });
+    }
+
+    function printYearEndReport() {
+      const year = document.getElementById('yearPicker').value;
+      const stats = buildPrintStats([
+        { label: 'Total Collected', value: formatCurrency(yearData.totalCollected), className: 'accent' },
+        { label: 'Total Expected', value: formatCurrency(yearData.totalExpected), className: '' },
+        { label: 'Family Compliance', value: (yearData.familyCompliance || 0) + '%', className: compliancePrintClass(yearData.familyCompliance) }
+      ]);
+
+      const rows = (yearData.members || []).map(function (m) {
+        return [
+          m.FullName,
+          String(m.monthsPaid),
+          String(m.monthsMissed),
+          formatCurrency(m.totalPaid),
+          { text: m.compliance + '%', className: complianceClass(m.compliance) }
+        ];
+      });
+
+      const bodyHtml =
+        stats +
+        '<div class="print-section"><h3>Member Compliance — ' + escapeHtml(year) + '</h3>' +
+        buildPrintTable(['Name', 'Months Paid', 'Months Missed', 'Total Paid', 'Compliance %'], rows, {
+          colClasses: ['', 'num', 'num', 'num', 'num'],
+          footer: ['Family Totals', '—', '—', formatCurrency(yearData.totalCollected), { text: (yearData.familyCompliance || 0) + '%', className: complianceClass(yearData.familyCompliance) }]
+        }) +
+        '</div>';
+
+      printReport({ title: 'Year-End Dues Summary', subtitle: 'Calendar Year ' + year, bodyHtml: bodyHtml });
     }
   </script>
 </body>

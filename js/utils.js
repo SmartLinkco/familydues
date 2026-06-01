@@ -135,6 +135,12 @@ function complianceClass(pct) {
   return 'compliance-low';
 }
 
+function compliancePrintClass(pct) {
+  if (pct >= 80) return 'success';
+  if (pct >= 50) return 'warning';
+  return 'danger';
+}
+
 function exportToCSV(rows, filename) {
   if (!rows || rows.length === 0) {
     showToast('No data to export', 'error');
@@ -208,16 +214,158 @@ function populateSelect(selectEl, options, valueKey, labelKey, placeholder) {
 }
 
 function printSection(elementId) {
-  const el = document.getElementById(elementId);
-  if (!el) return;
+  printReport({
+    title: 'Report',
+    bodyHtml: document.getElementById(elementId) ? document.getElementById(elementId).innerHTML : ''
+  });
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+let _printConfig = null;
+
+async function loadPrintConfig() {
+  if (_printConfig) return _printConfig;
+  const session = typeof getSession === 'function' ? getSession() : null;
+  let familyName = (session && session.familyName) || 'Family Dues';
+  let systemEmail = '';
+
+  if (typeof API !== 'undefined') {
+    const result = await API.getConfig();
+    if (result.success && result.data) {
+      if (result.data.FamilyName) familyName = result.data.FamilyName;
+      if (result.data.SystemEmail) systemEmail = result.data.SystemEmail;
+    }
+  }
+
+  _printConfig = { familyName: familyName, systemEmail: systemEmail };
+  return _printConfig;
+}
+
+function buildLetterheadHtml(config, reportTitle, reportSubtitle) {
+  const generated = formatDate(new Date());
+  return (
+    '<header class="print-letterhead">' +
+      '<div class="print-letterhead-top">' +
+        '<div class="print-logo">FD</div>' +
+        '<div class="print-brand">' +
+          '<h1>' + escapeHtml(config.familyName) + '</h1>' +
+          '<p class="print-tagline">Family Dues Management</p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="print-gold-rule"></div>' +
+      '<div class="print-report-meta">' +
+        '<h2>' + escapeHtml(reportTitle) + '</h2>' +
+        (reportSubtitle ? '<p class="print-subtitle">' + escapeHtml(reportSubtitle) + '</p>' : '') +
+        '<p class="print-date">Generated ' + generated + '</p>' +
+      '</div>' +
+    '</header>'
+  );
+}
+
+function buildPrintStats(stats) {
+  if (!stats || !stats.length) return '';
+  return (
+    '<div class="print-stats">' +
+    stats.map(function (s) {
+      return (
+        '<div class="print-stat">' +
+          '<div class="print-stat-label">' + escapeHtml(s.label) + '</div>' +
+          '<div class="print-stat-value' + (s.className ? ' ' + s.className : '') + '">' + escapeHtml(s.value) + '</div>' +
+        '</div>'
+      );
+    }).join('') +
+    '</div>'
+  );
+}
+
+function buildPrintTable(headers, rows, options) {
+  options = options || {};
+  const theadClass = options.headClass ? ' class="' + options.headClass + '"' : '';
+  const colClasses = options.colClasses || [];
+
+  if (!rows || rows.length === 0) {
+    return '<p class="print-empty">No records found</p>';
+  }
+
+  let html = '<table class="print-table"><thead' + theadClass + '><tr>';
+  headers.forEach(function (h, i) {
+    const cls = colClasses[i] === 'num' ? ' class="num"' : '';
+    html += '<th' + cls + '>' + escapeHtml(h) + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(function (row) {
+    html += '<tr>';
+    row.forEach(function (cell, i) {
+      const cls = colClasses[i] === 'num' ? ' class="num"' : (cell.className ? ' class="' + cell.className + '"' : '');
+      const val = typeof cell === 'object' && cell !== null && cell.text !== undefined ? cell.text : cell;
+      html += '<td' + cls + '>' + (typeof val === 'string' && val.indexOf('<') !== -1 ? val : escapeHtml(val)) + '</td>';
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody>';
+  if (options.footer) {
+    html += '<tfoot><tr>';
+    options.footer.forEach(function (cell, i) {
+      var classes = [];
+      if (colClasses[i] === 'num') classes.push('num');
+      if (typeof cell === 'object' && cell !== null && cell.className) classes.push(cell.className);
+      var val = typeof cell === 'object' && cell !== null && cell.text !== undefined ? cell.text : cell;
+      html += '<td' + (classes.length ? ' class="' + classes.join(' ') + '"' : '') + '>' + escapeHtml(String(val)) + '</td>';
+    });
+    html += '</tr></tfoot>';
+  }
+  html += '</table>';
+  return html;
+}
+
+async function printReport(options) {
+  const config = await loadPrintConfig();
   const printWindow = window.open('', '_blank');
-  printWindow.document.write('<html><head><title>Print</title>');
-  printWindow.document.write('<link rel="stylesheet" href="css/style.css">');
+  if (!printWindow) {
+    showToast('Please allow pop-ups to print reports', 'error');
+    return;
+  }
+
+  const pageTitle = escapeHtml(options.title) + ' — ' + escapeHtml(config.familyName);
+  const cssPath = new URL('css/print.css', window.location.href).href;
+
+  printWindow.document.open();
+  printWindow.document.write('<!DOCTYPE html><html lang="en"><head>');
+  printWindow.document.write('<meta charset="UTF-8">');
+  printWindow.document.write('<title>' + pageTitle + '</title>');
+  printWindow.document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">');
+  printWindow.document.write('<link rel="stylesheet" href="' + cssPath + '">');
   printWindow.document.write('</head><body>');
-  printWindow.document.write(el.innerHTML);
-  printWindow.document.write('</body></html>');
+  printWindow.document.write('<div class="print-document">');
+  printWindow.document.write(buildLetterheadHtml(config, options.title, options.subtitle));
+  printWindow.document.write('<main class="print-body">' + options.bodyHtml + '</main>');
+  printWindow.document.write(
+    '<footer class="print-footer">' +
+      '<p>' + escapeHtml(config.familyName) + ' · Family Dues Management System</p>' +
+      '<p>Printed ' + formatDate(new Date()) +
+      (config.systemEmail ? ' · ' + escapeHtml(config.systemEmail) : '') +
+      '</p>' +
+    '</footer>'
+  );
+  printWindow.document.write('</div></body></html>');
   printWindow.document.close();
-  printWindow.print();
+
+  printWindow.onload = function () {
+    printWindow.focus();
+    printWindow.print();
+  };
+  setTimeout(function () {
+    if (!printWindow.closed) printWindow.print();
+  }, 600);
 }
 
 function debounce(fn, delay) {

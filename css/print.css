@@ -1,0 +1,269 @@
+/**
+ * Family Dues — Print / Letterhead styles
+ * Used by printReport() in a dedicated print window
+ */
+
+@page {
+  size: A4;
+  margin: 14mm 16mm 18mm;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.45;
+  color: #212121;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.print-document {
+  max-width: 100%;
+}
+
+/* ─── Letterhead ─────────────────────────────────────────────────────────── */
+
+.print-letterhead {
+  margin-bottom: 24px;
+}
+
+.print-letterhead-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 12px;
+}
+
+.print-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #1B5E20;
+  color: #FFC107;
+  font-size: 18pt;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.print-brand h1 {
+  font-size: 20pt;
+  font-weight: 700;
+  color: #1B5E20;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.print-tagline {
+  font-size: 10pt;
+  color: #666;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.print-gold-rule {
+  height: 4px;
+  background: linear-gradient(90deg, #1B5E20 0%, #1B5E20 35%, #FFC107 35%, #FFC107 65%, #1B5E20 65%, #1B5E20 100%);
+  margin-bottom: 16px;
+  border-radius: 2px;
+}
+
+.print-report-meta {
+  padding: 12px 16px;
+  background: #f5f7f5;
+  border-radius: 6px;
+}
+
+.print-report-meta h2 {
+  font-size: 14pt;
+  font-weight: 700;
+  color: #1B5E20;
+  margin-bottom: 4px;
+}
+
+.print-subtitle {
+  font-size: 11pt;
+  color: #444;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.print-date {
+  font-size: 9pt;
+  color: #888;
+}
+
+/* ─── Body content ───────────────────────────────────────────────────────── */
+
+.print-body {
+  margin-bottom: 32px;
+}
+
+.print-section {
+  margin-bottom: 22px;
+  page-break-inside: avoid;
+}
+
+.print-section h3 {
+  font-size: 11pt;
+  font-weight: 700;
+  color: #1B5E20;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #FFC107;
+}
+
+.print-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.print-stat {
+  text-align: center;
+  padding: 12px 8px;
+  background: #f9f9f9;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+}
+
+.print-stat-label {
+  font-size: 8pt;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.print-stat-value {
+  font-size: 13pt;
+  font-weight: 700;
+  color: #1B5E20;
+}
+
+.print-stat-value.success { color: #2E7D32; }
+.print-stat-value.danger { color: #c62828; }
+.print-stat-value.accent { color: #FFA000; }
+.print-stat-value.warning { color: #f9a825; }
+
+/* ─── Tables ─────────────────────────────────────────────────────────────── */
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  margin-bottom: 4px;
+}
+
+.print-table thead {
+  background: #1B5E20;
+  color: #fff;
+}
+
+.print-table thead.success-head {
+  background: #2E7D32;
+}
+
+.print-table thead.danger-head {
+  background: #c62828;
+}
+
+.print-table th {
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 9pt;
+}
+
+.print-table th.num,
+.print-table td.num {
+  text-align: right;
+}
+
+.print-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #e8e8e8;
+  vertical-align: top;
+}
+
+.print-table tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.print-table tfoot td {
+  font-weight: 700;
+  background: #f0f0f0;
+  border-top: 2px solid #1B5E20;
+  padding: 10px;
+}
+
+.print-table .compliance-high { color: #2E7D32; font-weight: 700; }
+.print-table .compliance-medium { color: #f9a825; font-weight: 700; }
+.print-table .compliance-low { color: #c62828; font-weight: 700; }
+
+.print-empty {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+  font-style: italic;
+  font-size: 10pt;
+}
+
+.print-member-banner {
+  padding: 10px 14px;
+  background: #e8f5e9;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 10pt;
+}
+
+.print-member-banner strong {
+  color: #1B5E20;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
+
+.print-footer {
+  margin-top: 28px;
+  padding-top: 12px;
+  border-top: 2px solid #1B5E20;
+  text-align: center;
+  font-size: 8.5pt;
+  color: #888;
+}
+
+.print-footer p {
+  margin-bottom: 2px;
+}
+
+.print-footer p:first-child {
+  color: #1B5E20;
+  font-weight: 600;
+  font-size: 9pt;
+}
+
+@media print {
+  body { background: #fff; }
+  .print-section { page-break-inside: avoid; }
+  .print-table thead { display: table-header-group; }
+  .print-table tr { page-break-inside: avoid; }
+}
+
+@media screen {
+  body {
+    padding: 24px;
+    max-width: 210mm;
+    margin: 0 auto;
+  }
+}
