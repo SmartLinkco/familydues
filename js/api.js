@@ -3,7 +3,7 @@
  * All requests use GET to avoid CORS preflight issues with Google Apps Script Web Apps
  */
 
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzx6hl_tLWgl8otJAsIYaRxfWivP9FDSXMeknNLginlyPqxJL71qeRvXWJHQXfCxEMn/exec';
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzr0vzuL2456UjlnFvIaUl_DG6FT1TZ26EbJM_7kibQ2WUl2qK0NRasLrGq5GN7vDP8/exec';
 
 async function apiCall(action, params = {}) {
   const session = getSession();

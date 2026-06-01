@@ -161,6 +161,7 @@ All requests use GET with query parameters to avoid CORS preflight issues.
 ## Email Notifications
 
 Automated emails (via Gmail):
+- **Payment recorded:** Receipt emailed to member with payment details
 - **5 days before month end:** Monthly reminder to unpaid members
 - **Day after deadline:** Overdue notice to unpaid members + consolidated alert to Treasurer/Admin
 - **Account created:** Welcome email with credentials

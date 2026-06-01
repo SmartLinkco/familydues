@@ -193,9 +193,13 @@
         return;
       }
 
+      const member = eligibleMembers.find(function (m) { return m.MemberID === memberId; });
+      const dues = member ? parseFloat(member.DuesAmount) || 0 : 0;
+
       const data = {
         memberId: memberId,
         month: document.getElementById('paymentMonth').value,
+        amountDue: dues,
         amountPaid: document.getElementById('amountPaid').value,
         paymentChannel: channel,
         momoReference: document.getElementById('momoReference').value.trim(),
@@ -204,7 +208,10 @@
 
       const result = await API.recordPayment(data);
       if (result.success) {
-        showToast('Payment recorded successfully');
+        const msg = result.data.receiptSent
+          ? 'Payment recorded. Receipt emailed to member.'
+          : 'Payment recorded successfully.';
+        showToast(msg);
         document.getElementById('paymentForm').reset();
         document.getElementById('amountDue').value = '';
         toggleMomoRef();

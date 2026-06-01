@@ -737,34 +737,85 @@ function recordPayment(params, username) {
 
   var sheet = getSheet('PAYMENTS');
   var paymentId = generatePaymentId(sheet);
-  var month = params.month || params.Month || getCurrentMonthLabel();
+  var month = normalizeMonthLabel(params.month || params.Month || getCurrentMonthLabel());
   var amountDue = parseFloat(params.amountDue || params.AmountDue || member.DuesAmount || 0);
   var amountPaid = parseFloat(params.amountPaid || params.AmountPaid || amountDue);
+  var paymentDate = params.paymentDate || params.PaymentDate || new Date();
+  var momoRef = channel === 'MoMo' ? (params.momoReference || params.MoMoReference || '') : '';
 
   sheet.appendRow([
     paymentId,
-    memberId,
+    String(memberId),
     member.FullName,
     month,
     amountDue,
     amountPaid,
-    params.paymentDate || params.PaymentDate || new Date(),
+    paymentDate,
     channel,
-    channel === 'MoMo' ? (params.momoReference || params.MoMoReference || '') : '',
+    momoRef,
     username,
     params.notes || params.Notes || ''
   ]);
 
+  var lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow, 4).setNumberFormat('@').setValue(month);
+
+  var payment = {
+    PaymentID: paymentId,
+    MemberID: String(memberId),
+    MemberName: member.FullName,
+    Month: month,
+    AmountDue: amountDue,
+    AmountPaid: amountPaid,
+    PaymentDate: paymentDate,
+    PaymentChannel: channel,
+    MoMoReference: momoRef,
+    RecordedBy: username,
+    Notes: params.notes || params.Notes || ''
+  };
+
+  var receiptSent = false;
+  if (member.Email) {
+    try {
+      sendPaymentReceiptEmail(member, payment, getConfigMap());
+      receiptSent = true;
+      auditLog(username, 'RECEIPT_SENT', 'Receipt emailed to ' + member.Email + ' for ' + paymentId);
+    } catch (emailErr) {
+      auditLog(username, 'RECEIPT_FAILED', paymentId + ': ' + String(emailErr.message || emailErr));
+    }
+  }
+
   auditLog(username, 'RECORD_PAYMENT', paymentId + ' for ' + memberId + ' - ' + month);
-  return { success: true, data: { paymentId: paymentId }, error: '' };
+  return {
+    success: true,
+    data: { paymentId: paymentId, receiptSent: receiptSent },
+    error: ''
+  };
+}
+
+function normalizePaymentRecord(p) {
+  return {
+    PaymentID: p.PaymentID,
+    MemberID: String(p.MemberID || ''),
+    MemberName: p.MemberName,
+    Month: normalizeMonthLabel(p.Month),
+    AmountDue: p.AmountDue,
+    AmountPaid: p.AmountPaid,
+    PaymentDate: p.PaymentDate,
+    PaymentChannel: p.PaymentChannel,
+    MoMoReference: p.MoMoReference || '',
+    RecordedBy: p.RecordedBy,
+    Notes: p.Notes || ''
+  };
 }
 
 function getPayments(params) {
-  var payments = sheetToObjects(getSheet('PAYMENTS'));
+  var payments = sheetToObjects(getSheet('PAYMENTS')).map(normalizePaymentRecord);
 
   if (params.month || params.Month) {
+    var filterMonth = normalizeMonthLabel(params.month || params.Month);
     payments = payments.filter(function (p) {
-      return String(p.Month) === String(params.month || params.Month);
+      return monthsMatch(p.Month, filterMonth);
     });
   }
   if (params.memberId || params.MemberID) {
@@ -814,18 +865,19 @@ function getEligibleMembers() {
 }
 
 function getPaidMemberIdsForMonth(month) {
+  var targetMonth = normalizeMonthLabel(month);
   var payments = sheetToObjects(getSheet('PAYMENTS'));
   var paid = {};
   payments.forEach(function (p) {
-    if (String(p.Month) === String(month)) {
-      paid[p.MemberID] = true;
+    if (monthsMatch(p.Month, targetMonth)) {
+      paid[String(p.MemberID)] = true;
     }
   });
   return paid;
 }
 
 function getMonthlySummary(params) {
-  var month = params.month || params.Month || getCurrentMonthLabel();
+  var month = normalizeMonthLabel(params.month || params.Month || getCurrentMonthLabel());
   var eligible = getEligibleMembers();
   var paidIds = getPaidMemberIdsForMonth(month);
 
@@ -837,10 +889,10 @@ function getMonthlySummary(params) {
   eligible.forEach(function (m) {
     var dues = parseFloat(m.DuesAmount) || 0;
     totalExpected += dues;
-    if (paidIds[m.MemberID]) {
+    if (paidIds[String(m.MemberID)]) {
       paidMembers.push(m);
       var payments = sheetToObjects(getSheet('PAYMENTS')).filter(function (p) {
-        return p.MemberID === m.MemberID && String(p.Month) === String(month);
+        return String(p.MemberID) === String(m.MemberID) && monthsMatch(p.Month, month);
       });
       payments.forEach(function (p) {
         totalCollected += parseFloat(p.AmountPaid) || 0;
@@ -874,7 +926,7 @@ function getMemberHistory(params, sessionMemberId, role) {
 
   var payments = sheetToObjects(getSheet('PAYMENTS')).filter(function (p) {
     return String(p.MemberID) === String(memberId);
-  });
+  }).map(normalizePaymentRecord);
 
   payments.sort(function (a, b) {
     return new Date(b.PaymentDate) - new Date(a.PaymentDate);
@@ -906,7 +958,7 @@ function getMemberHistory(params, sessionMemberId, role) {
 }
 
 function getOverdueMembers(params) {
-  var month = params.month || params.Month || getCurrentMonthLabel();
+  var month = normalizeMonthLabel(params.month || params.Month || getCurrentMonthLabel());
   var config = getConfigMap();
   var deadlineDay = parseInt(config.DeadlineDay, 10) || 31;
   var now = new Date();
@@ -962,8 +1014,8 @@ function getYearEndSummary(params) {
     var paidMonths = {};
 
     allPayments.forEach(function (p) {
-      if (p.MemberID !== m.MemberID) return;
-      var md = parseMonthLabel(p.Month);
+      if (String(p.MemberID) !== String(m.MemberID)) return;
+      var md = parseMonthLabel(normalizeMonthLabel(p.Month));
       if (md && md.getFullYear() === year) {
         paidMonths[md.getMonth()] = true;
         totalPaid += parseFloat(p.AmountPaid) || 0;
@@ -1224,6 +1276,50 @@ function sendWelcomeEmail(name, email, username, tempPassword) {
   });
 }
 
+function sendPaymentReceiptEmail(member, payment, config) {
+  var familyName = config.FamilyName || 'Family';
+  var monthLabel = normalizeMonthLabel(payment.Month);
+  var amountDue = parseFloat(payment.AmountDue) || 0;
+  var amountPaid = parseFloat(payment.AmountPaid) || 0;
+  var receiptRows = [
+    ['Receipt No.', payment.PaymentID],
+    ['Member', member.FullName],
+    ['Month', monthLabel],
+    ['Amount Due', 'GHS ' + amountDue.toFixed(2)],
+    ['Amount Paid', 'GHS ' + amountPaid.toFixed(2)],
+    ['Payment Channel', payment.PaymentChannel],
+    ['Payment Date', formatDateDisplay(payment.PaymentDate)],
+    ['Recorded By', payment.RecordedBy]
+  ];
+
+  if (payment.PaymentChannel === 'MoMo' && payment.MoMoReference) {
+    receiptRows.push(['MoMo Reference', payment.MoMoReference]);
+  }
+  if (payment.Notes) {
+    receiptRows.push(['Notes', payment.Notes]);
+  }
+
+  var tableHtml = receiptRows.map(function (row) {
+    return '<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#666;">' + row[0] +
+      '</td><td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;">' + row[1] + '</td></tr>';
+  }).join('');
+
+  var body = emailWrapper(familyName,
+    '<p>Dear ' + member.FullName + ',</p>' +
+    '<p>Thank you. Your dues payment has been received and recorded successfully.</p>' +
+    '<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#f9f9f9;border-radius:6px;">' +
+    tableHtml + '</table>' +
+    '<p>Please keep this email as your official payment receipt.</p>'
+  );
+
+  GmailApp.sendEmail(
+    member.Email,
+    'Payment Receipt — ' + familyName + ' (' + monthLabel + ')',
+    '',
+    { htmlBody: body, name: familyName + ' Dues' }
+  );
+}
+
 function sendPasswordResetEmail(name, email, username, tempPassword) {
   var config = getConfigMap();
   var familyName = config.FamilyName || 'Family';
@@ -1280,13 +1376,66 @@ function parseMonthLabel(label) {
   if (!label) return null;
   var months = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
-  var parts = String(label).split(' ');
+  var parts = String(label).trim().split(/\s+/);
   if (parts.length < 2) return null;
   var idx = months.indexOf(parts[0]);
   if (idx === -1) return null;
   return new Date(parseInt(parts[1], 10), idx, 1);
 }
 
+function normalizeMonthLabel(value) {
+  if (value === null || value === undefined || value === '') return '';
+
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return formatMonthLabel(value);
+  }
+
+  var str = String(value).trim();
+  var parsed = parseMonthLabel(str);
+  if (parsed) return formatMonthLabel(parsed);
+
+  var asDate = new Date(str);
+  if (!isNaN(asDate.getTime())) return formatMonthLabel(asDate);
+
+  return str;
+}
+
+function monthsMatch(a, b) {
+  return normalizeMonthLabel(a) === normalizeMonthLabel(b);
+}
+
+function formatDateDisplay(dateVal) {
+  var d = dateVal instanceof Date ? dateVal : new Date(dateVal);
+  if (isNaN(d.getTime())) return String(dateVal || '');
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd MMM yyyy');
+}
+
 function formatDateISO(date) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+/**
+ * One-time fix: normalizes Month column text for all existing payment rows.
+ * Run from Apps Script editor if older payments are missing from reports.
+ */
+function fixPaymentMonthFormats() {
+  var sheet = getSheet('PAYMENTS');
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 'No payments to fix';
+
+  var data = sheet.getRange(2, 1, lastRow, sheet.getLastColumn()).getValues();
+  var fixed = 0;
+
+  for (var i = 0; i < data.length; i++) {
+    var normalized = normalizeMonthLabel(data[i][3]);
+    if (normalized && normalized !== String(data[i][3])) {
+      var rowNum = i + 2;
+      sheet.getRange(rowNum, 4).setNumberFormat('@').setValue(normalized);
+      fixed++;
+    } else if (normalized) {
+      sheet.getRange(i + 2, 4).setNumberFormat('@');
+    }
+  }
+
+  return 'Fixed ' + fixed + ' payment month value(s)';
 }
