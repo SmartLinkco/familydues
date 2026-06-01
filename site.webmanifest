@@ -1,0 +1,24 @@
+{
+  "name": "Asempa Royal Family Dues",
+  "short_name": "Asempa Dues",
+  "description": "Official dues management portal for the Asempa Royal Family.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#1B5E20",
+  "theme_color": "#1B5E20",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "assets/images/asempa-royal-family-logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/images/asempa-royal-family-logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ]
+}

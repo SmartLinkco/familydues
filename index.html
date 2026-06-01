@@ -3,18 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Sign in to the Asempa Royal Family Dues portal to manage monthly family contributions, payments, and records.">
   <meta name="theme-color" content="#1B5E20">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Login — Family Dues</title>
+  <link rel="icon" href="assets/images/asempa-royal-family-logo.jpeg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="assets/images/asempa-royal-family-logo.jpeg">
+  <link rel="manifest" href="site.webmanifest">
+  <title>Login — Asempa Royal Family Dues</title>
   <link rel="stylesheet" href="css/style.css">
+  <script src="js/branding.js"></script>
+  <script>
+    applyBranding({
+      title: 'Login — Asempa Royal Family Dues',
+      description: 'Sign in to the Asempa Royal Family Dues portal to manage monthly family contributions, payments, and records.'
+    });
+  </script>
 </head>
 <body>
   <div class="login-page">
     <div class="login-card">
       <div class="login-header">
-        <div class="login-logo">FD</div>
-        <h1 id="familyNameDisplay">Family Dues</h1>
+        <div class="login-logo">
+          <img class="brand-logo-img" src="assets/images/asempa-royal-family-logo.jpeg" alt="Asempa Royal Family logo" width="88" height="88">
+        </div>
+        <h1 id="familyNameDisplay" data-brand-name="true">Asempa Royal Family</h1>
         <p>Sign in to manage your family dues</p>
       </div>
 

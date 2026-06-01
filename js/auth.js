@@ -204,7 +204,9 @@ function initPageLayout(activePage, allowedRoles) {
 
   document.getElementById('userName').textContent = session.memberName || session.username;
   document.getElementById('userRole').textContent = session.role;
-  document.getElementById('familyName').textContent = session.familyName || 'Family Dues';
+  const displayName = session.familyName || (typeof BRAND !== 'undefined' ? BRAND.familyName : 'Family Dues');
+  document.getElementById('familyName').textContent = displayName;
+  if (typeof initBrandDisplay === 'function') initBrandDisplay(displayName);
 
   document.querySelectorAll('.nav-item').forEach(function (item) {
     if (item.dataset.page === activePage) item.classList.add('active');
@@ -297,8 +299,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 async function loadFamilyName() {
   const result = await API.getConfig();
-  if (result.success && result.data.FamilyName) {
-    const el = document.getElementById('familyNameDisplay');
-    if (el) el.textContent = result.data.FamilyName;
-  }
+  const name = (result.success && result.data.FamilyName)
+    ? result.data.FamilyName
+    : (typeof BRAND !== 'undefined' ? BRAND.familyName : 'Family Dues');
+  const el = document.getElementById('familyNameDisplay');
+  if (el) el.textContent = name;
+  if (typeof initBrandDisplay === 'function') initBrandDisplay(name);
 }

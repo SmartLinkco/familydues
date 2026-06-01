@@ -227,7 +227,7 @@ function seedConfig(ss) {
   var defaults = [
     ['DeadlineDay', '31'],
     ['CurrencySymbol', 'GHS'],
-    ['FamilyName', 'Your Family Name'],
+    ['FamilyName', 'Asempa Royal Family'],
     ['SystemEmail', Session.getActiveUser().getEmail() || ''],
     ['ReminderDaysBefore', '5'],
     ['ElderlyAgeThreshold', '60'],

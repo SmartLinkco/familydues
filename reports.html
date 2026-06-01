@@ -3,15 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Asempa Royal Family dues reports — monthly summaries, member history, overdue members, and year-end compliance.">
   <meta name="theme-color" content="#1B5E20">
-  <title>Reports — Family Dues</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="assets/images/asempa-royal-family-logo.jpeg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="assets/images/asempa-royal-family-logo.jpeg">
+  <link rel="manifest" href="site.webmanifest">
+  <title>Reports — Asempa Royal Family Dues</title>
   <link rel="stylesheet" href="css/style.css">
+  <script src="js/branding.js"></script>
+  <script>
+    applyBranding({
+      title: 'Reports — Asempa Royal Family Dues',
+      description: 'Asempa Royal Family dues reports — monthly summaries, member history, overdue members, and year-end compliance.'
+    });
+  </script>
 </head>
 <body>
   <div class="app-layout">
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-brand">
-        <h2 id="familyName">Family Dues</h2>
+        <img class="brand-logo-img sidebar-brand-logo" src="assets/images/asempa-royal-family-logo.jpeg" alt="Asempa Royal Family logo" width="52" height="52">
+        <h2 id="familyName" data-brand-name="true">Asempa Royal Family</h2>
         <span>Dues Management</span>
       </div>
       <nav class="sidebar-nav">

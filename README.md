@@ -31,7 +31,7 @@ Open the **FamilyDuesDB** spreadsheet and update the **DUES_CONFIG** sheet:
 
 | ConfigKey | Example Value |
 |-----------|---------------|
-| FamilyName | The Asante Family |
+| FamilyName | Asempa Royal Family |
 | SystemEmail | your@gmail.com |
 | TreasurerEmail | treasurer@gmail.com |
 | MoMoNumber | 0241234567 |
@@ -122,6 +122,10 @@ familydues/
 │   ├── api.js               # API client (GET requests)
 │   ├── auth.js              # Session management
 │   └── utils.js             # Helpers, toasts, formatting
+├── assets/images/
+│   └── asempa-royal-family-logo.jpeg  # Family logo (favicon, SEO, PWA)
+├── site.webmanifest         # Mobile home-screen app manifest
+├── js/branding.js           # SEO meta, Open Graph, shared brand constants
 ├── index.html               # Login page
 ├── dashboard.html           # Role-aware dashboard
 ├── members.html             # Member management

@@ -233,8 +233,12 @@ let _printConfig = null;
 async function loadPrintConfig() {
   if (_printConfig) return _printConfig;
   const session = typeof getSession === 'function' ? getSession() : null;
-  let familyName = (session && session.familyName) || 'Family Dues';
+  let familyName = (session && session.familyName) ||
+    (typeof BRAND !== 'undefined' ? BRAND.familyName : 'Asempa Royal Family');
   let systemEmail = '';
+  let logoUrl = typeof getBrandLogoUrl === 'function'
+    ? getBrandLogoUrl()
+    : new URL('assets/images/asempa-royal-family-logo.jpeg', window.location.href).href;
 
   if (typeof API !== 'undefined') {
     const result = await API.getConfig();
@@ -244,16 +248,17 @@ async function loadPrintConfig() {
     }
   }
 
-  _printConfig = { familyName: familyName, systemEmail: systemEmail };
+  _printConfig = { familyName: familyName, systemEmail: systemEmail, logoUrl: logoUrl };
   return _printConfig;
 }
 
 function buildLetterheadHtml(config, reportTitle, reportSubtitle) {
   const generated = formatDate(new Date());
+  const logoSrc = config.logoUrl || 'assets/images/asempa-royal-family-logo.jpeg';
   return (
     '<header class="print-letterhead">' +
       '<div class="print-letterhead-top">' +
-        '<div class="print-logo">FD</div>' +
+        '<img class="print-logo" src="' + escapeHtml(logoSrc) + '" alt="' + escapeHtml(config.familyName) + ' logo">' +
         '<div class="print-brand">' +
           '<h1>' + escapeHtml(config.familyName) + '</h1>' +
           '<p class="print-tagline">Family Dues Management</p>' +

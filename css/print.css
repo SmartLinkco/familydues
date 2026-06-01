@@ -42,17 +42,11 @@ body {
 }
 
 .print-logo {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #1B5E20;
-  color: #FFC107;
-  font-size: 18pt;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .print-brand h1 {
