@@ -33,6 +33,7 @@
         <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
         <a href="members.html" class="nav-item" data-page="members">Members</a>
         <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="disbursements.html" class="nav-item" data-page="disbursements">Disbursements</a>
         <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
         <a href="users.html" class="nav-item" data-page="users">Users</a>
         <a href="#" id="logoutBtn" class="nav-item">Logout</a>
@@ -56,7 +57,19 @@
         <p id="currentMonth" class="page-subtitle"></p>
 
         <div id="personalDuesCard" class="card-grid"></div>
-        <div id="roleCards" class="card-grid"></div>
+
+        <div id="allTimeSection" style="display:none;">
+          <div class="table-toolbar" style="padding:0;margin-bottom:8px;">
+            <h3 class="section-heading" style="margin:0;">All Time</h3>
+            <select id="allTimeYear" class="form-control" style="width:auto;"></select>
+          </div>
+          <div id="allTimeCards" class="card-grid"></div>
+        </div>
+
+        <div id="currentMonthSection" style="display:none;">
+          <h3 class="section-heading">This Month — <span id="dashboardMonthLabel"></span></h3>
+          <div id="roleCards" class="card-grid"></div>
+        </div>
 
         <div id="chartSection" class="card-section" style="display:none;">
           <h3>Monthly Collections (Last 6 Months)</h3>
@@ -95,6 +108,7 @@
   <script>
     let session;
     let chartInstance;
+    let dashboardData = {};
 
     document.addEventListener('DOMContentLoaded', async function () {
       session = initPageLayout('dashboard');
@@ -103,14 +117,30 @@
       document.getElementById('welcomeMsg').textContent = 'Welcome, ' + (session.memberName || session.username);
       document.getElementById('currentMonth').textContent = getCurrentMonthLabel();
 
-      const result = await API.getDashboardData();
+      const allTimeYearEl = document.getElementById('allTimeYear');
+      if (allTimeYearEl) {
+        allTimeYearEl.innerHTML = '<option value="all">All Time</option>' +
+          getYearOptions(10).map(function (y) {
+            return '<option value="' + y + '">' + y + '</option>';
+          }).join('');
+        allTimeYearEl.addEventListener('change', loadDashboard);
+      }
+
+      await loadDashboard();
+    });
+
+    async function loadDashboard() {
+      const year = document.getElementById('allTimeYear')
+        ? document.getElementById('allTimeYear').value
+        : 'all';
+      const result = await API.getDashboardData(year);
       if (!result.success) {
         showToast(result.error || 'Failed to load dashboard', 'error');
         return;
       }
-
-      renderDashboard(result.data, session.role);
-    });
+      dashboardData = result.data;
+      renderDashboard(dashboardData, session.role);
+    }
 
     function renderDashboard(data, role) {
       const personalEl = document.getElementById('personalDuesCard');
@@ -128,15 +158,34 @@
 
       if (role === 'Admin' || role === 'Treasurer') {
         const s = data.summary || {};
+        const t = data.totalCollections || {};
+        const d = data.totalDisbursements || {};
+        const net = data.netBalance || 0;
+        const periodLabel = data.financialPeriod || 'All Time';
+
+        document.getElementById('allTimeSection').style.display = 'block';
+        document.getElementById('currentMonthSection').style.display = 'block';
+        document.getElementById('dashboardMonthLabel').textContent = data.month || getCurrentMonthLabel();
+
+        document.getElementById('allTimeCards').innerHTML = `
+          <div class="card"><div class="card-label">Period</div><div class="card-value">${periodLabel}</div></div>
+          <div class="card"><div class="card-label">Total Collections</div><div class="card-value accent">${formatCurrency(t.totalCollected)}</div></div>
+          <div class="card"><div class="card-label">Total Disbursements</div><div class="card-value danger">${formatCurrency(d.totalDisbursements)}</div></div>
+          <div class="card"><div class="card-label">Net Balance</div><div class="card-value ${net >= 0 ? 'success' : 'danger'}">${formatCurrency(net)}</div></div>
+          <div class="card"><div class="card-label">Monthly Dues Collected</div><div class="card-value success">${formatCurrency(t.monthlyDuesTotal)}</div></div>
+          <div class="card"><div class="card-label">Acceptance Fees Collected</div><div class="card-value">${formatCurrency(t.acceptanceFeeTotal)}</div></div>`;
+
         roleCards.innerHTML = `
           <div class="card"><div class="card-label">Eligible Members</div><div class="card-value">${s.eligibleCount || 0}</div></div>
           <div class="card"><div class="card-label">Members Paid</div><div class="card-value success">${s.paidCount || 0}</div></div>
+          <div class="card"><div class="card-label">Partial</div><div class="card-value" style="color:#f9a825;">${s.partialCount || 0}</div></div>
           <div class="card"><div class="card-label">Members Unpaid</div><div class="card-value danger">${s.unpaidCount || 0}</div></div>
-          <div class="card"><div class="card-label">Total Collected</div><div class="card-value accent">${formatCurrency(s.totalCollected)}</div></div>
-          <div class="card"><div class="card-label">Total Outstanding</div><div class="card-value danger">${formatCurrency(s.totalOutstanding)}</div></div>`;
+          <div class="card"><div class="card-label">Collected This Month</div><div class="card-value accent">${formatCurrency(s.totalCollected)}</div></div>
+          <div class="card"><div class="card-label">Outstanding This Month</div><div class="card-value danger">${formatCurrency(s.totalOutstanding)}</div></div>`;
 
         quickActions.innerHTML = `
           <a href="payments.html" class="btn btn-primary">Record Payment</a>
+          <a href="disbursements.html" class="btn btn-outline">Record Disbursement</a>
           <a href="reports.html" class="btn btn-outline">View Reports</a>
           <a href="members.html" class="btn btn-outline">Manage Members</a>`;
 
@@ -162,7 +211,7 @@
 
       if (role === 'Member') {
         quickActions.innerHTML = '';
-        renderMemberHistory(data.paymentHistory || []);
+        renderMemberAccount(data);
       }
     }
 
@@ -193,29 +242,42 @@
       });
     }
 
-    function renderMemberHistory(payments) {
+    function renderMemberAccount(data) {
       document.getElementById('memberHistorySection').style.display = 'block';
-      const tbody = document.getElementById('memberHistoryBody');
-      const months = getMonthOptions(12);
-      const paidMonths = {};
-      payments.forEach(function (p) { paidMonths[p.Month] = p; });
-
-      tbody.innerHTML = months.map(function (month) {
-        const p = paidMonths[month];
-        if (p) {
-          return `<tr>
-            <td>${month}</td>
-            <td>${formatCurrency(p.AmountDue)}</td>
-            <td>${formatCurrency(p.AmountPaid)}</td>
-            <td>${p.PaymentChannel || ''}</td>
-            <td>${formatDate(p.PaymentDate)}</td>
-            <td>${statusBadge('PAID')}</td>
-          </tr>`;
+      const section = document.getElementById('memberHistorySection');
+      const af = data.acceptanceFee || {};
+      let extra = '';
+      if (af.amount !== undefined) {
+        extra += '<div class="card-grid" style="margin-bottom:16px;">' +
+          '<div class="card"><div class="card-label">Acceptance Fee</div><div class="card-value">' + formatCurrency(af.amount) + '</div>' +
+          '<div style="margin-top:8px;">' + (af.waived ? statusBadge('EXEMPT') : (af.paid ? statusBadge('PAID') : statusBadge('UNPAID'))) + '</div></div>';
+        if ((data.arrears || []).length) {
+          extra += '<div class="card"><div class="card-label">Arrears</div><div class="card-value danger">' + data.arrears.length + ' month(s)</div></div>';
         }
+        if ((data.advance || []).length) {
+          extra += '<div class="card"><div class="card-label">Paid in Advance</div><div class="card-value success">' + data.advance.length + ' month(s)</div></div>';
+        }
+        extra += '</div>';
+      }
+      const existingExtra = section.querySelector('.member-extra-cards');
+      if (existingExtra) existingExtra.remove();
+      if (extra) {
+        const div = document.createElement('div');
+        div.className = 'member-extra-cards';
+        div.innerHTML = extra;
+        section.insertBefore(div, section.querySelector('.table-wrapper'));
+      }
+
+      const tbody = document.getElementById('memberHistoryBody');
+      const grid = data.paymentHistory || [];
+      tbody.innerHTML = grid.filter(function (e) { return e.amountDue > 0 || e.amountPaid > 0; }).map(function (e) {
         return `<tr>
-          <td>${month}</td>
-          <td>—</td><td>—</td><td>—</td><td>—</td>
-          <td>${statusBadge('UNPAID')}</td>
+          <td>${e.month}</td>
+          <td>${formatCurrency(e.amountDue)}</td>
+          <td>${formatCurrency(e.amountPaid)}</td>
+          <td>—</td>
+          <td>—</td>
+          <td>${statusBadge(e.status)}</td>
         </tr>`;
       }).join('') || '<tr><td colspan="6" class="empty-state">No records found</td></tr>';
       refreshResponsiveTables();

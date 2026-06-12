@@ -374,6 +374,13 @@ a:hover {
   font-size: 0.9375rem;
 }
 
+.section-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 8px 0 12px;
+}
+
 /* ─── Cards ──────────────────────────────────────────────────────────────── */
 
 .card-grid {

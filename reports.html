@@ -32,6 +32,7 @@
         <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
         <a href="members.html" class="nav-item" data-page="members">Members</a>
         <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="disbursements.html" class="nav-item" data-page="disbursements">Disbursements</a>
         <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
         <a href="users.html" class="nav-item" data-page="users">Users</a>
         <a href="#" id="logoutBtn" class="nav-item">Logout</a>
@@ -52,14 +53,63 @@
 
       <main class="page-content">
         <div class="tabs">
-          <button class="tab-btn active" data-tab="monthly">Monthly Summary</button>
+          <button class="tab-btn active" data-tab="collections">Total Collection</button>
+          <button class="tab-btn" data-tab="monthly">Monthly Summary</button>
           <button class="tab-btn" data-tab="history">Member History</button>
           <button class="tab-btn" data-tab="overdue">Overdue Members</button>
           <button class="tab-btn" data-tab="yearend">Year-End Summary</button>
         </div>
 
-        <!-- Tab 1: Monthly Summary -->
-        <div id="tab-monthly" class="tab-panel active">
+        <!-- Tab 1: Total Collection -->
+        <div id="tab-collections" class="tab-panel active">
+          <div class="table-toolbar">
+            <select id="collectionsYear" class="form-control" style="width:auto;"></select>
+            <div class="toolbar-actions">
+              <button class="btn btn-outline btn-sm" onclick="exportCollectionsCSV()">Export to CSV</button>
+              <button class="btn btn-outline btn-sm" onclick="printCollectionsReport()">Print</button>
+            </div>
+          </div>
+          <div id="collectionsCards" class="card-grid"></div>
+          <div class="card-section">
+            <h3>By Payment Type</h3>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Type</th><th>Transactions</th><th>Amount</th></tr></thead>
+                <tbody id="collectionsByTypeBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-section">
+            <h3>By Channel</h3>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Channel</th><th>Transactions</th><th>Amount</th></tr></thead>
+                <tbody id="collectionsByChannelBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-section">
+            <h3>All Recorded Payments</h3>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Date</th><th>Member</th><th>Type</th><th>Month</th><th>Amount</th><th>Channel</th><th>Recorded By</th></tr></thead>
+                <tbody id="collectionsPaymentsBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-section" style="border-top:3px solid #c62828;">
+            <h3>Disbursements</h3>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Date</th><th>Purpose</th><th>Amount</th><th>Channel</th><th>Recorded By</th></tr></thead>
+                <tbody id="collectionsDisbursementsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Monthly Summary -->
+        <div id="tab-monthly" class="tab-panel">
           <div class="table-toolbar">
             <select id="monthlyMonth" class="form-control" style="width:auto;"></select>
             <div class="toolbar-actions">
@@ -74,6 +124,13 @@
               <div class="table-wrapper">
                 <table><thead><tr><th>Name</th><th>Email</th><th>Dues Amount</th></tr></thead>
                 <tbody id="paidMembersBody"></tbody></table>
+              </div>
+            </div>
+            <div class="card-section" style="border-top:3px solid #f9a825;">
+              <h3>Partially Paid Members</h3>
+              <div class="table-wrapper">
+                <table><thead><tr><th>Name</th><th>Email</th><th>Paid</th><th>Outstanding</th></tr></thead>
+                <tbody id="partialMembersBody"></tbody></table>
               </div>
             </div>
             <div class="card-section table-unpaid">
@@ -158,6 +215,12 @@
     let historyData = {};
     let overdueData = [];
     let yearData = {};
+    let collectionsData = {};
+
+    function formatPaymentType(type) {
+      if (type === 'AcceptanceFee') return 'Acceptance Fee';
+      return 'Monthly Dues';
+    }
 
     document.addEventListener('DOMContentLoaded', async function () {
       session = initPageLayout('reports', ['Admin', 'Treasurer']);
@@ -167,6 +230,12 @@
       populateSelect(document.getElementById('monthlyMonth'), months);
       populateSelect(document.getElementById('overdueMonth'), months);
       populateSelect(document.getElementById('yearPicker'), getYearOptions(5).map(String));
+
+      const collectionsYearEl = document.getElementById('collectionsYear');
+      collectionsYearEl.innerHTML = '<option value="all">All Time</option>' +
+        getYearOptions(10).map(function (y) {
+          return '<option value="' + y + '">' + y + '</option>';
+        }).join('');
 
       document.querySelectorAll('.tab-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -181,6 +250,7 @@
       document.getElementById('historyMember').addEventListener('change', loadMemberHistory);
       document.getElementById('overdueMonth').addEventListener('change', loadOverdue);
       document.getElementById('yearPicker').addEventListener('change', loadYearEnd);
+      document.getElementById('collectionsYear').addEventListener('change', loadTotalCollections);
       document.getElementById('remindAllBtn').addEventListener('click', remindAllOverdue);
 
       const membersResult = await API.getMembers('all');
@@ -193,6 +263,7 @@
       await loadMonthlySummary();
       await loadOverdue();
       await loadYearEnd();
+      await loadTotalCollections();
     });
 
     async function loadMonthlySummary() {
@@ -204,6 +275,7 @@
       document.getElementById('monthlyCards').innerHTML = `
         <div class="card"><div class="card-label">Eligible</div><div class="card-value">${monthlyData.eligibleCount}</div></div>
         <div class="card"><div class="card-label">Paid</div><div class="card-value success">${monthlyData.paidCount}</div></div>
+        <div class="card"><div class="card-label">Partial</div><div class="card-value" style="color:#f9a825;">${monthlyData.partialCount || 0}</div></div>
         <div class="card"><div class="card-label">Unpaid</div><div class="card-value danger">${monthlyData.unpaidCount}</div></div>
         <div class="card"><div class="card-label">Collected</div><div class="card-value accent">${formatCurrency(monthlyData.totalCollected)}</div></div>
         <div class="card"><div class="card-label">Outstanding</div><div class="card-value danger">${formatCurrency(monthlyData.totalOutstanding)}</div></div>`;
@@ -212,6 +284,11 @@
       paidBody.innerHTML = (monthlyData.paidMembers || []).map(function (m) {
         return `<tr><td>${m.FullName}</td><td>${m.Email || ''}</td><td>${formatCurrency(m.DuesAmount)}</td></tr>`;
       }).join('') || '<tr><td colspan="3" class="empty-state">No records found</td></tr>';
+
+      const partialBody = document.getElementById('partialMembersBody');
+      partialBody.innerHTML = (monthlyData.partialMembers || []).map(function (m) {
+        return `<tr><td>${m.FullName}</td><td>${m.Email || ''}</td><td>${formatCurrency(m.AmountPaid)}</td><td>${formatCurrency(m.Outstanding)}</td></tr>`;
+      }).join('') || '<tr><td colspan="4" class="empty-state">No records found</td></tr>';
 
       const unpaidBody = document.getElementById('unpaidMembersBody');
       unpaidBody.innerHTML = (monthlyData.unpaidMembers || []).map(function (m) {
@@ -241,12 +318,19 @@
         <div class="card"><div class="card-label">Months Missed</div><div class="card-value danger">${historyData.monthsMissed}</div></div>
         <div class="card"><div class="card-label">Compliance</div><div class="card-value ${complianceClass(historyData.compliance)}">${historyData.compliance}%</div></div>`;
 
-      document.getElementById('historyBody').innerHTML = (historyData.payments || []).map(function (p) {
-        return `<tr>
-          <td>${p.Month}</td><td>${formatCurrency(p.AmountDue)}</td><td>${formatCurrency(p.AmountPaid)}</td>
-          <td>${p.PaymentChannel}</td><td>${formatDate(p.PaymentDate)}</td><td>${statusBadge('PAID')}</td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="6" class="empty-state">No records found</td></tr>';
+      let historyHtml = '';
+      if (historyData.acceptanceFee) {
+        const af = historyData.acceptanceFee;
+        historyHtml += `<tr><td>Acceptance Fee</td><td>${formatCurrency(af.amount)}</td><td>${af.paid ? formatCurrency(af.amount) : '—'}</td><td>—</td><td>${af.paidDate ? formatDate(af.paidDate) : '—'}</td><td>${af.waived ? statusBadge('EXEMPT') : (af.paid ? statusBadge('PAID') : statusBadge('UNPAID'))}</td></tr>`;
+      }
+      if (historyData.monthGrid) {
+        historyHtml += historyData.monthGrid.filter(function (e) { return e.amountDue > 0; }).map(function (e) {
+          return `<tr>
+            <td>${e.month}</td><td>${formatCurrency(e.amountDue)}</td><td>${formatCurrency(e.amountPaid)}</td>
+            <td>—</td><td>—</td><td>${statusBadge(e.status)}</td></tr>`;
+        }).join('');
+      }
+      document.getElementById('historyBody').innerHTML = historyHtml || '<tr><td colspan="6" class="empty-state">No records found</td></tr>';
       refreshResponsiveTables();
     }
 
@@ -295,13 +379,64 @@
       refreshResponsiveTables();
     }
 
+    async function loadTotalCollections() {
+      const year = document.getElementById('collectionsYear').value;
+      const result = await API.getTotalCollections(year);
+      if (!result.success) { showToast(result.error, 'error'); return; }
+      collectionsData = result.data;
+
+      document.getElementById('collectionsCards').innerHTML = `
+        <div class="card"><div class="card-label">Period</div><div class="card-value">${collectionsData.period}</div></div>
+        <div class="card"><div class="card-label">Total Collected</div><div class="card-value accent">${formatCurrency(collectionsData.totalCollected)}</div></div>
+        <div class="card"><div class="card-label">Total Disbursements</div><div class="card-value danger">${formatCurrency(collectionsData.totalDisbursements)}</div></div>
+        <div class="card"><div class="card-label">Net Balance</div><div class="card-value ${(collectionsData.netBalance || 0) >= 0 ? 'success' : 'danger'}">${formatCurrency(collectionsData.netBalance)}</div></div>
+        <div class="card"><div class="card-label">Monthly Dues</div><div class="card-value success">${formatCurrency(collectionsData.monthlyDuesTotal)}</div></div>
+        <div class="card"><div class="card-label">Acceptance Fees</div><div class="card-value">${formatCurrency(collectionsData.acceptanceFeeTotal)}</div></div>
+        <div class="card"><div class="card-label">Payment Transactions</div><div class="card-value">${collectionsData.paymentCount}</div></div>
+        <div class="card"><div class="card-label">Disbursements</div><div class="card-value">${collectionsData.disbursementCount || 0}</div></div>`;
+
+      document.getElementById('collectionsByTypeBody').innerHTML = (collectionsData.byType || []).map(function (row) {
+        return `<tr><td>${formatPaymentType(row.type)}</td><td>${row.count}</td><td>${formatCurrency(row.amount)}</td></tr>`;
+      }).join('') || '<tr><td colspan="3" class="empty-state">No records found</td></tr>';
+
+      document.getElementById('collectionsByChannelBody').innerHTML = (collectionsData.byChannel || []).map(function (row) {
+        return `<tr><td>${row.channel}</td><td>${row.count}</td><td>${formatCurrency(row.amount)}</td></tr>`;
+      }).join('') || '<tr><td colspan="3" class="empty-state">No records found</td></tr>';
+
+      document.getElementById('collectionsPaymentsBody').innerHTML = (collectionsData.payments || []).map(function (p) {
+        return `<tr>
+          <td>${formatDate(p.PaymentDate)}</td>
+          <td>${p.MemberName || p.MemberID}</td>
+          <td>${formatPaymentType(p.PaymentType)}</td>
+          <td>${p.Month || '—'}</td>
+          <td>${formatCurrency(p.AmountPaid)}</td>
+          <td>${p.PaymentChannel || '—'}</td>
+          <td>${p.RecordedBy || '—'}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7" class="empty-state">No records found</td></tr>';
+
+      document.getElementById('collectionsDisbursementsBody').innerHTML = (collectionsData.disbursements || []).map(function (d) {
+        return `<tr>
+          <td>${formatDate(d.DisbursementDate)}</td>
+          <td>${d.Purpose}</td>
+          <td>${formatCurrency(d.Amount)}</td>
+          <td>${d.Channel || '—'}</td>
+          <td>${d.RecordedBy || '—'}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty-state">No records found</td></tr>';
+      refreshResponsiveTables();
+    }
+
     function exportMonthlyCSV() {
       const rows = [];
       (monthlyData.paidMembers || []).forEach(function (m) {
         rows.push({ Status: 'Paid', Name: m.FullName, Email: m.Email, Amount: m.DuesAmount });
       });
+      (monthlyData.partialMembers || []).forEach(function (m) {
+        rows.push({ Status: 'Partial', Name: m.FullName, Email: m.Email, Paid: m.AmountPaid, Outstanding: m.Outstanding });
+      });
       (monthlyData.unpaidMembers || []).forEach(function (m) {
-        rows.push({ Status: 'Unpaid', Name: m.FullName, Email: m.Email, Amount: m.DuesAmount });
+        rows.push({ Status: 'Unpaid', Name: m.FullName, Email: m.Email, Amount: m.Outstanding || m.DuesAmount });
       });
       exportToCSV(rows, 'monthly-summary.csv');
     }
@@ -324,11 +459,40 @@
       }), 'year-end-summary.csv');
     }
 
+    function exportCollectionsCSV() {
+      const paymentRows = (collectionsData.payments || []).map(function (p) {
+        return {
+          EntryType: 'Collection',
+          Date: formatDate(p.PaymentDate),
+          Member: p.MemberName || p.MemberID,
+          Type: formatPaymentType(p.PaymentType),
+          Month: p.Month || '',
+          Amount: p.AmountPaid,
+          Channel: p.PaymentChannel || '',
+          RecordedBy: p.RecordedBy || ''
+        };
+      });
+      const disbursementRows = (collectionsData.disbursements || []).map(function (d) {
+        return {
+          EntryType: 'Disbursement',
+          Date: formatDate(d.DisbursementDate),
+          Member: '',
+          Type: d.Purpose,
+          Month: '',
+          Amount: -Math.abs(parseFloat(d.Amount) || 0),
+          Channel: d.Channel || '',
+          RecordedBy: d.RecordedBy || ''
+        };
+      });
+      exportToCSV(paymentRows.concat(disbursementRows), 'total-collections.csv');
+    }
+
     function printMonthlyReport() {
       const month = document.getElementById('monthlyMonth').value;
       const stats = buildPrintStats([
         { label: 'Eligible', value: String(monthlyData.eligibleCount || 0) },
         { label: 'Paid', value: String(monthlyData.paidCount || 0), className: 'success' },
+        { label: 'Partial', value: String(monthlyData.partialCount || 0), className: 'warning' },
         { label: 'Unpaid', value: String(monthlyData.unpaidCount || 0), className: 'danger' },
         { label: 'Collected', value: formatCurrency(monthlyData.totalCollected), className: 'accent' },
         { label: 'Outstanding', value: formatCurrency(monthlyData.totalOutstanding), className: 'danger' }
@@ -337,14 +501,20 @@
       const paidRows = (monthlyData.paidMembers || []).map(function (m) {
         return [m.FullName, m.Email || '—', formatCurrency(m.DuesAmount)];
       });
+      const partialRows = (monthlyData.partialMembers || []).map(function (m) {
+        return [m.FullName, m.Email || '—', formatCurrency(m.AmountPaid), formatCurrency(m.Outstanding)];
+      });
       const unpaidRows = (monthlyData.unpaidMembers || []).map(function (m) {
-        return [m.FullName, m.Email || '—', formatCurrency(m.DuesAmount)];
+        return [m.FullName, m.Email || '—', formatCurrency(m.Outstanding || m.DuesAmount)];
       });
 
       const bodyHtml =
         stats +
         '<div class="print-section"><h3>Paid Members (' + (monthlyData.paidCount || 0) + ')</h3>' +
         buildPrintTable(['Name', 'Email', 'Amount'], paidRows, { headClass: 'success-head', colClasses: ['', '', 'num'] }) +
+        '</div>' +
+        '<div class="print-section"><h3>Partially Paid (' + (monthlyData.partialCount || 0) + ')</h3>' +
+        buildPrintTable(['Name', 'Email', 'Paid', 'Outstanding'], partialRows, { colClasses: ['', '', 'num', 'num'] }) +
         '</div>' +
         '<div class="print-section"><h3>Unpaid Members (' + (monthlyData.unpaidCount || 0) + ')</h3>' +
         buildPrintTable(['Name', 'Email', 'Amount Due'], unpaidRows, { headClass: 'danger-head', colClasses: ['', '', 'num'] }) +
@@ -443,6 +613,68 @@
         '</div>';
 
       printReport({ title: 'Year-End Dues Summary', subtitle: 'Calendar Year ' + year, bodyHtml: bodyHtml });
+    }
+
+    function printCollectionsReport() {
+      const year = document.getElementById('collectionsYear').value;
+      const subtitle = year === 'all' ? 'All Time' : 'Calendar Year ' + year;
+      const stats = buildPrintStats([
+        { label: 'Total Collected', value: formatCurrency(collectionsData.totalCollected), className: 'accent' },
+        { label: 'Total Disbursements', value: formatCurrency(collectionsData.totalDisbursements), className: 'danger' },
+        { label: 'Net Balance', value: formatCurrency(collectionsData.netBalance), className: (collectionsData.netBalance || 0) >= 0 ? 'success' : 'danger' },
+        { label: 'Monthly Dues', value: formatCurrency(collectionsData.monthlyDuesTotal), className: 'success' },
+        { label: 'Acceptance Fees', value: formatCurrency(collectionsData.acceptanceFeeTotal), className: '' },
+        { label: 'Payment Transactions', value: String(collectionsData.paymentCount || 0), className: '' }
+      ]);
+
+      const typeRows = (collectionsData.byType || []).map(function (row) {
+        return [formatPaymentType(row.type), String(row.count), formatCurrency(row.amount)];
+      });
+      const channelRows = (collectionsData.byChannel || []).map(function (row) {
+        return [row.channel, String(row.count), formatCurrency(row.amount)];
+      });
+      const paymentRows = (collectionsData.payments || []).map(function (p) {
+        return [
+          formatDate(p.PaymentDate),
+          p.MemberName || p.MemberID,
+          formatPaymentType(p.PaymentType),
+          p.Month || '—',
+          formatCurrency(p.AmountPaid),
+          p.PaymentChannel || '—',
+          p.RecordedBy || '—'
+        ];
+      });
+      const disbursementRows = (collectionsData.disbursements || []).map(function (d) {
+        return [
+          formatDate(d.DisbursementDate),
+          d.Purpose,
+          formatCurrency(d.Amount),
+          d.Channel || '—',
+          d.RecordedBy || '—'
+        ];
+      });
+
+      const bodyHtml =
+        stats +
+        '<div class="print-section"><h3>By Payment Type</h3>' +
+        buildPrintTable(['Type', 'Transactions', 'Amount'], typeRows, { colClasses: ['', 'num', 'num'] }) +
+        '</div>' +
+        '<div class="print-section"><h3>By Channel</h3>' +
+        buildPrintTable(['Channel', 'Transactions', 'Amount'], channelRows, { colClasses: ['', 'num', 'num'] }) +
+        '</div>' +
+        '<div class="print-section"><h3>All Recorded Payments</h3>' +
+        buildPrintTable(['Date', 'Member', 'Type', 'Month', 'Amount', 'Channel', 'Recorded By'], paymentRows, {
+          colClasses: ['', '', '', '', 'num', '', '']
+        }) +
+        '</div>' +
+        '<div class="print-section"><h3>Disbursements</h3>' +
+        buildPrintTable(['Date', 'Purpose', 'Amount', 'Channel', 'Recorded By'], disbursementRows, {
+          headClass: 'danger-head',
+          colClasses: ['', '', 'num', '', '']
+        }) +
+        '</div>';
+
+      printReport({ title: 'Total Collection Report', subtitle: subtitle, bodyHtml: bodyHtml });
     }
   </script>
 </body>

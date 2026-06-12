@@ -15,9 +15,9 @@ Frontend (Static HTML)  →  Google Apps Script Web App  →  Google Sheets (Fam
 ### 1. Set up Google Sheets database
 
 1. Go to [Google Apps Script](https://script.google.com) and create a new project.
-2. Copy the contents of `apps-script/Code.gs` into the script editor.
+2. Copy the contents of `apps-script/Code.gs` and `apps-script/PaymentEngine.gs` into the script editor (same project).
 3. Copy `apps-script/sample_data_seed.gs` into the same project (optional, for testing).
-4. Run the `setupDatabase()` function once from the script editor.
+4. Run the `setupDatabase()` function once from the script editor (also runs `migrateDatabase()` for schema updates).
 5. Authorize the script when prompted. This creates the **FamilyDuesDB** spreadsheet with all required sheets, columns, config defaults, and the default admin account.
 
 ### 2. Enable Gmail API
@@ -36,6 +36,7 @@ Open the **FamilyDuesDB** spreadsheet and update the **DUES_CONFIG** sheet:
 | TreasurerEmail | treasurer@gmail.com |
 | MoMoNumber | 0241234567 |
 | LoginUrl | https://your-site.github.io/familydues/index.html |
+| AcceptanceFee | 10 |
 
 ### 4. Deploy as Web App
 

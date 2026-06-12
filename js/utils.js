@@ -122,7 +122,11 @@ function statusBadge(status) {
     Inactive: 'badge-inactive',
     Exempt: 'badge-exempt',
     PAID: 'badge-paid',
+    Paid: 'badge-paid',
     UNPAID: 'badge-unpaid',
+    Unpaid: 'badge-unpaid',
+    PARTIAL: 'badge-warning',
+    Partial: 'badge-warning',
     EXEMPT: 'badge-exempt'
   };
   const cls = map[status] || 'badge-exempt';

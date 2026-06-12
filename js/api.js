@@ -3,7 +3,7 @@
  * All requests use GET to avoid CORS preflight issues with Google Apps Script Web Apps
  */
 
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzr0vzuL2456UjlnFvIaUl_DG6FT1TZ26EbJM_7kibQ2WUl2qK0NRasLrGq5GN7vDP8/exec';
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbw2TvRa0-_0_1ztPvy3yDya6nkMSNBtnXbSCty3NqunqvXAeqs8844iVtXOYz46rkRu/exec';
 
 async function apiCall(action, params = {}) {
   const session = getSession();
@@ -41,8 +41,8 @@ const API = {
   getConfig: () =>
     apiCall('getConfig'),
 
-  getDashboardData: () =>
-    apiCall('getDashboardData'),
+  getDashboardData: (year = 'all') =>
+    apiCall('getDashboardData', { year: String(year) }),
 
   getMembers: (filter = 'all') =>
     apiCall('getMembers', { filter }),
@@ -74,8 +74,16 @@ const API = {
   toggleUserActive: (userId, isActive) =>
     apiCall('toggleUserActive', { userId, isActive: String(isActive) }),
 
-  recordPayment: (data) =>
-    apiCall('recordPayment', data),
+  recordPayment: (data) => {
+    const payload = Object.assign({}, data);
+    if (payload.allocations && typeof payload.allocations !== 'string') {
+      payload.allocations = JSON.stringify(payload.allocations);
+    }
+    return apiCall('recordPayment', payload);
+  },
+
+  getMemberDuesStatus: (memberId) =>
+    apiCall('getMemberDuesStatus', { memberId }),
 
   getPayments: (filters = {}) =>
     apiCall('getPayments', filters),
@@ -97,6 +105,18 @@ const API = {
 
   getYearEndSummary: (year) =>
     apiCall('getYearEndSummary', { year }),
+
+  getTotalCollections: (year = 'all') =>
+    apiCall('getTotalCollections', { year: String(year) }),
+
+  recordDisbursement: (data) =>
+    apiCall('recordDisbursement', data),
+
+  getDisbursements: (year = 'all') =>
+    apiCall('getDisbursements', { year: String(year) }),
+
+  deleteDisbursement: (disbursementId, reason) =>
+    apiCall('deleteDisbursement', { disbursementId, reason }),
 
   sendReminders: () =>
     apiCall('sendReminders'),

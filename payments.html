@@ -32,6 +32,7 @@
         <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
         <a href="members.html" class="nav-item" data-page="members">Members</a>
         <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="disbursements.html" class="nav-item" data-page="disbursements">Disbursements</a>
         <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
         <a href="users.html" class="nav-item" data-page="users">Users</a>
         <a href="#" id="logoutBtn" class="nav-item">Logout</a>
@@ -56,25 +57,67 @@
           <form id="paymentForm">
             <div class="form-row">
               <div class="form-group">
+                <label for="paymentType" class="required">Payment Type</label>
+                <select id="paymentType" class="form-control">
+                  <option value="MonthlyDues">Monthly Dues</option>
+                  <option value="AcceptanceFee">Acceptance Fee</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label for="memberSelect" class="required">Select Member</label>
                 <select id="memberSelect" class="form-control" required></select>
-                <div id="memberSelectError" class="form-error"></div>
-              </div>
-              <div class="form-group">
-                <label for="amountDue">Dues Amount</label>
-                <input type="text" id="amountDue" class="form-control" readonly>
-              </div>
-              <div class="form-group">
-                <label for="paymentMonth" class="required">Month</label>
-                <select id="paymentMonth" class="form-control" required></select>
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="amountPaid" class="required">Amount Paid</label>
-                <input type="number" id="amountPaid" class="form-control" min="0" step="0.01" required>
-                <div id="amountPaidError" class="form-error"></div>
+
+            <div id="memberStatusPanel" class="card-section" style="display:none;padding:16px;margin-bottom:16px;background:#f9f9f9;"></div>
+
+            <div id="acceptanceFeePanel" style="display:none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="acceptanceFeeAmount">Acceptance Fee Due</label>
+                  <input type="text" id="acceptanceFeeAmount" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                  <label for="acceptanceAmountPaid" class="required">Amount Paid</label>
+                  <input type="number" id="acceptanceAmountPaid" class="form-control" min="0" step="0.01">
+                </div>
               </div>
+            </div>
+
+            <div id="monthlyDuesPanel">
+              <div class="form-group">
+                <label>Allocation Mode</label>
+                <div class="btn-group" style="margin-bottom:0;">
+                  <button type="button" id="modeSimpleBtn" class="btn btn-primary btn-sm">Simple</button>
+                  <button type="button" id="modeAdvancedBtn" class="btn btn-outline btn-sm">Advanced</button>
+                </div>
+              </div>
+
+              <div id="simplePanel">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="amountDue">Monthly Dues</label>
+                    <input type="text" id="amountDue" class="form-control" readonly>
+                  </div>
+                  <div class="form-group">
+                    <label for="paymentMonth" class="required">Target Month</label>
+                    <select id="paymentMonth" class="form-control"></select>
+                    <small style="color:#666;">Surplus after this month is applied as advance to future months.</small>
+                  </div>
+                  <div class="form-group">
+                    <label for="amountPaid" class="required">Amount Paid</label>
+                    <input type="number" id="amountPaid" class="form-control" min="0" step="0.01">
+                  </div>
+                </div>
+              </div>
+
+              <div id="advancedPanel" style="display:none;">
+                <p style="margin-bottom:12px;color:#666;font-size:0.875rem;">Select months and enter the amount to apply to each.</p>
+                <div id="advancedMonthList" class="table-wrapper"></div>
+              </div>
+            </div>
+
+            <div class="form-row">
               <div class="form-group">
                 <label for="paymentChannel" class="required">Payment Channel</label>
                 <select id="paymentChannel" class="form-control">
@@ -85,7 +128,6 @@
               <div class="form-group" id="momoRefGroup" style="display:none;">
                 <label for="momoReference" class="required">MoMo Reference Number</label>
                 <input type="text" id="momoReference" class="form-control">
-                <div id="momoReferenceError" class="form-error"></div>
               </div>
             </div>
             <div class="form-group">
@@ -100,6 +142,11 @@
           <div class="table-toolbar">
             <h3 style="margin:0;">Payment Log</h3>
             <div class="table-filters">
+              <select id="filterType" class="form-control" style="width:auto;">
+                <option value="">All Types</option>
+                <option value="MonthlyDues">Monthly Dues</option>
+                <option value="AcceptanceFee">Acceptance Fee</option>
+              </select>
               <select id="filterMonth" class="form-control" style="width:auto;">
                 <option value="">All Months</option>
               </select>
@@ -118,13 +165,14 @@
               <thead>
                 <tr>
                   <th>Payment ID</th>
+                  <th>Batch</th>
                   <th>Member</th>
+                  <th>Type</th>
                   <th>Month</th>
                   <th>Amount</th>
+                  <th>Status</th>
                   <th>Channel</th>
-                  <th>MoMo Ref</th>
                   <th>Date</th>
-                  <th>Recorded By</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -141,46 +189,130 @@
   <script src="js/auth.js"></script>
   <script>
     let session;
-    let eligibleMembers = [];
+    let allMembers = [];
+    let memberDuesStatus = null;
+    let allocationMode = 'simple';
     let allPayments = [];
 
     document.addEventListener('DOMContentLoaded', async function () {
       session = initPageLayout('payments', ['Admin', 'Treasurer']);
       if (!session) return;
 
-      populateSelect(document.getElementById('paymentMonth'), getMonthOptions(12));
-      const filterMonthEl = document.getElementById('filterMonth');
-      populateSelect(filterMonthEl, getMonthOptions(24), null, null, 'All Months');
+      populateSelect(document.getElementById('paymentMonth'), getMonthOptions(24));
+      populateSelect(document.getElementById('filterMonth'), getMonthOptions(24), null, null, 'All Months');
 
+      document.getElementById('paymentType').addEventListener('change', onPaymentTypeChange);
       document.getElementById('paymentChannel').addEventListener('change', toggleMomoRef);
       document.getElementById('memberSelect').addEventListener('change', onMemberSelect);
       document.getElementById('paymentForm').addEventListener('submit', recordPayment);
+      document.getElementById('modeSimpleBtn').addEventListener('click', function () { setAllocationMode('simple'); });
+      document.getElementById('modeAdvancedBtn').addEventListener('click', function () { setAllocationMode('advanced'); });
+      document.getElementById('filterType').addEventListener('change', loadPayments);
       document.getElementById('filterMonth').addEventListener('change', loadPayments);
       document.getElementById('filterMember').addEventListener('change', loadPayments);
       document.getElementById('filterChannel').addEventListener('change', loadPayments);
 
-      await loadEligibleMembers();
+      await loadMembers();
       await loadPayments();
+      onPaymentTypeChange();
     });
 
-    async function loadEligibleMembers() {
-      const result = await API.getMembers('Active');
+    async function loadMembers() {
+      const result = await API.getMembers('all');
       if (!result.success) return;
-      eligibleMembers = result.data.filter(function (m) {
-        return m.Status === 'Active' && m.ExemptionReason === 'none';
-      });
-      populateSelect(document.getElementById('memberSelect'), eligibleMembers, 'MemberID', 'FullName', 'Select a member...');
-      populateSelect(document.getElementById('filterMember'), [{ MemberID: '', FullName: 'All Members' }].concat(
-        result.data.map(function (m) { return m; })
-      ), 'MemberID', 'FullName');
+      allMembers = result.data.filter(function (m) { return m.Status !== 'Inactive'; });
+      populateSelect(document.getElementById('memberSelect'), allMembers, 'MemberID', 'FullName', 'Select a member...');
+      populateSelect(document.getElementById('filterMember'), [{ MemberID: '', FullName: 'All Members' }].concat(allMembers), 'MemberID', 'FullName');
     }
 
-    function onMemberSelect() {
+    function setAllocationMode(mode) {
+      allocationMode = mode;
+      document.getElementById('simplePanel').style.display = mode === 'simple' ? 'block' : 'none';
+      document.getElementById('advancedPanel').style.display = mode === 'advanced' ? 'block' : 'none';
+      document.getElementById('modeSimpleBtn').className = mode === 'simple' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+      document.getElementById('modeAdvancedBtn').className = mode === 'advanced' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+    }
+
+    function onPaymentTypeChange() {
+      const type = document.getElementById('paymentType').value;
+      document.getElementById('acceptanceFeePanel').style.display = type === 'AcceptanceFee' ? 'block' : 'none';
+      document.getElementById('monthlyDuesPanel').style.display = type === 'MonthlyDues' ? 'block' : 'none';
+      if (document.getElementById('memberSelect').value) onMemberSelect();
+    }
+
+    async function onMemberSelect() {
       const id = document.getElementById('memberSelect').value;
-      const member = eligibleMembers.find(function (m) { return m.MemberID === id; });
-      const dues = member ? parseFloat(member.DuesAmount) || 0 : 0;
-      document.getElementById('amountDue').value = formatCurrency(dues);
-      document.getElementById('amountPaid').value = dues;
+      const panel = document.getElementById('memberStatusPanel');
+      if (!id) {
+        panel.style.display = 'none';
+        return;
+      }
+
+      const member = allMembers.find(function (m) { return m.MemberID === id; });
+      const result = await API.getMemberDuesStatus(id);
+      if (!result.success) {
+        showToast(result.error, 'error');
+        return;
+      }
+      memberDuesStatus = result.data;
+
+      const af = memberDuesStatus.acceptanceFee;
+      let html = '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">';
+      html += '<div><strong>Acceptance Fee:</strong> ' + formatCurrency(af.amount);
+      if (af.waived) html += ' ' + statusBadge('EXEMPT') + ' (Waived)';
+      else if (af.paid) html += ' ' + statusBadge('PAID');
+      else html += ' ' + statusBadge('UNPAID');
+      html += '</div>';
+      if (member && member.Status === 'Active' && member.ExemptionReason === 'none') {
+        html += '<div><strong>Current month:</strong> ' + statusBadge(memberDuesStatus.currentMonthStatus) + '</div>';
+        if (memberDuesStatus.arrears.length) {
+          html += '<div><strong>Arrears:</strong> ' + memberDuesStatus.arrears.length + ' month(s)</div>';
+        }
+        if (memberDuesStatus.advance.length) {
+          html += '<div><strong>Advance:</strong> ' + memberDuesStatus.advance.length + ' month(s)</div>';
+        }
+      }
+      html += '</div>';
+      panel.innerHTML = html;
+      panel.style.display = 'block';
+
+      if (document.getElementById('paymentType').value === 'AcceptanceFee') {
+        document.getElementById('acceptanceFeeAmount').value = formatCurrency(af.amount);
+        document.getElementById('acceptanceAmountPaid').value = af.amount;
+      } else if (member && member.Status === 'Active' && member.ExemptionReason === 'none') {
+        const dues = parseFloat(member.DuesAmount) || 0;
+        document.getElementById('amountDue').value = formatCurrency(dues);
+        document.getElementById('amountPaid').value = dues;
+        renderAdvancedMonthList(member, memberDuesStatus.monthGrid);
+      }
+    }
+
+    function renderAdvancedMonthList(member, monthGrid) {
+      const container = document.getElementById('advancedMonthList');
+      const dues = parseFloat(member.DuesAmount) || 0;
+      container.innerHTML = '<table><thead><tr><th></th><th>Month</th><th>Status</th><th>Outstanding</th><th>Amount to Apply</th></tr></thead><tbody>' +
+        monthGrid.map(function (entry, idx) {
+          const outstanding = entry.outstanding || Math.max(0, dues - (entry.amountPaid || 0));
+          return '<tr><td><input type="checkbox" class="adv-month-check" data-idx="' + idx + '"></td>' +
+            '<td>' + entry.month + '</td><td>' + statusBadge(entry.status) + '</td>' +
+            '<td>' + formatCurrency(outstanding) + '</td>' +
+            '<td><input type="number" class="form-control adv-month-amt" data-idx="' + idx + '" min="0" step="0.01" value="0" style="min-height:36px;padding:6px;"></td></tr>';
+        }).join('') + '</tbody></table>';
+
+      container.querySelectorAll('.adv-month-check').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          const idx = parseInt(cb.dataset.idx, 10);
+          const entry = monthGrid[idx];
+          const amtInput = container.querySelector('.adv-month-amt[data-idx="' + idx + '"]');
+          if (cb.checked) {
+            const outstanding = entry.outstanding || Math.max(0, dues - (entry.amountPaid || 0));
+            amtInput.value = outstanding > 0 ? outstanding : dues;
+          } else {
+            amtInput.value = 0;
+          }
+        });
+      });
+      container._monthGrid = monthGrid;
     }
 
     function toggleMomoRef() {
@@ -190,46 +322,67 @@
 
     async function recordPayment(e) {
       e.preventDefault();
-      clearFormErrors('paymentForm');
-
       const memberId = document.getElementById('memberSelect').value;
       if (!memberId) {
-        document.getElementById('memberSelect').classList.add('error');
         showToast('Please select a member', 'error');
         return;
       }
 
       const channel = document.getElementById('paymentChannel').value;
       if (channel === 'MoMo' && !document.getElementById('momoReference').value.trim()) {
-        document.getElementById('momoReference').classList.add('error');
-        document.getElementById('momoReferenceError').textContent = 'MoMo reference is required';
-        document.getElementById('momoReferenceError').classList.add('visible');
+        showToast('MoMo reference is required', 'error');
         return;
       }
 
-      const member = eligibleMembers.find(function (m) { return m.MemberID === memberId; });
-      const dues = member ? parseFloat(member.DuesAmount) || 0 : 0;
-
+      const paymentType = document.getElementById('paymentType').value;
       const data = {
         memberId: memberId,
-        month: document.getElementById('paymentMonth').value,
-        amountDue: dues,
-        amountPaid: document.getElementById('amountPaid').value,
+        paymentType: paymentType,
         paymentChannel: channel,
         momoReference: document.getElementById('momoReference').value.trim(),
         notes: document.getElementById('paymentNotes').value.trim()
       };
 
+      if (paymentType === 'AcceptanceFee') {
+        data.amountPaid = document.getElementById('acceptanceAmountPaid').value;
+      } else {
+        if (allocationMode === 'advanced') {
+          const grid = document.getElementById('advancedMonthList')._monthGrid || [];
+          const allocations = [];
+          document.querySelectorAll('.adv-month-check:checked').forEach(function (cb) {
+            const idx = parseInt(cb.dataset.idx, 10);
+            const amt = parseFloat(document.querySelector('.adv-month-amt[data-idx="' + idx + '"]').value) || 0;
+            if (amt > 0 && grid[idx]) {
+              allocations.push({ month: grid[idx].month, amount: amt });
+            }
+          });
+          if (!allocations.length) {
+            showToast('Select at least one month with an amount', 'error');
+            return;
+          }
+          data.mode = 'advanced';
+          data.allocations = allocations;
+          data.amountPaid = allocations.reduce(function (s, a) { return s + parseFloat(a.amount); }, 0);
+        } else {
+          data.mode = 'simple';
+          data.month = document.getElementById('paymentMonth').value;
+          data.amountPaid = document.getElementById('amountPaid').value;
+        }
+      }
+
       const result = await API.recordPayment(data);
       if (result.success) {
+        const lines = result.data.linesCreated || 1;
         const msg = result.data.receiptSent
-          ? 'Payment recorded. Receipt emailed to member.'
-          : 'Payment recorded successfully.';
+          ? 'Payment recorded (' + lines + ' line(s)). Receipt emailed.'
+          : 'Payment recorded (' + lines + ' line(s)).';
         showToast(msg);
         document.getElementById('paymentForm').reset();
-        document.getElementById('amountDue').value = '';
+        setAllocationMode('simple');
         toggleMomoRef();
+        onPaymentTypeChange();
         await loadPayments();
+        if (memberId) await onMemberSelect();
       } else {
         showToast(result.error || 'Failed to record payment', 'error');
       }
@@ -237,12 +390,10 @@
 
     async function loadPayments() {
       const filters = {};
-      const month = document.getElementById('filterMonth').value;
-      const member = document.getElementById('filterMember').value;
-      const channel = document.getElementById('filterChannel').value;
-      if (month) filters.month = month;
-      if (member) filters.memberId = member;
-      if (channel) filters.channel = channel;
+      if (document.getElementById('filterType').value) filters.paymentType = document.getElementById('filterType').value;
+      if (document.getElementById('filterMonth').value) filters.month = document.getElementById('filterMonth').value;
+      if (document.getElementById('filterMember').value) filters.memberId = document.getElementById('filterMember').value;
+      if (document.getElementById('filterChannel').value) filters.channel = document.getElementById('filterChannel').value;
 
       const result = await API.getPayments(filters);
       if (!result.success) {
@@ -258,33 +409,36 @@
       const isAdmin = session.role === 'Admin';
 
       if (allPayments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No records found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No records found</td></tr>';
         refreshResponsiveTables();
         return;
       }
 
       tbody.innerHTML = allPayments.map(function (p) {
+        const typeLabel = p.PaymentType === 'AcceptanceFee' ? 'Acceptance Fee' : 'Monthly Dues';
+        const deleteId = p.BatchPaymentID || p.PaymentID;
         return `<tr>
           <td>${p.PaymentID}</td>
+          <td>${p.BatchPaymentID || '—'}</td>
           <td>${p.MemberName}</td>
-          <td>${p.Month}</td>
+          <td>${typeLabel}</td>
+          <td>${p.Month || '—'}</td>
           <td>${formatCurrency(p.AmountPaid)}</td>
+          <td>${p.MonthStatus ? statusBadge(p.MonthStatus) : '—'}</td>
           <td>${p.PaymentChannel}</td>
-          <td>${p.MoMoReference || '—'}</td>
           <td>${formatDate(p.PaymentDate)}</td>
-          <td>${p.RecordedBy}</td>
-          <td>${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deletePayment('${p.PaymentID}')">Delete</button>` : '—'}</td>
+          <td>${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deletePayment('${deleteId}')">Delete</button>` : '—'}</td>
         </tr>`;
       }).join('');
       refreshResponsiveTables();
     }
 
     async function deletePayment(paymentId) {
-      const reason = prompt('Enter reason for deleting payment ' + paymentId + ':');
+      const reason = prompt('Enter reason for deleting batch ' + paymentId + ':');
       if (!reason) return;
       const result = await API.deletePayment(paymentId, reason);
       if (result.success) {
-        showToast('Payment deleted');
+        showToast('Payment batch deleted');
         await loadPayments();
       } else {
         showToast(result.error, 'error');

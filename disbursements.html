@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Record Asempa Royal Family fund disbursements — track money spent and remaining balance.">
+  <meta name="theme-color" content="#1B5E20">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="assets/images/asempa-royal-family-logo.jpeg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="assets/images/asempa-royal-family-logo.jpeg">
+  <link rel="manifest" href="site.webmanifest">
+  <title>Disbursements — Asempa Royal Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/branding.js"></script>
+  <script>
+    applyBranding({
+      title: 'Disbursements — Asempa Royal Family Dues',
+      description: 'Record Asempa Royal Family fund disbursements — track money spent and remaining balance.'
+    });
+  </script>
+</head>
+<body>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <img class="brand-logo-img sidebar-brand-logo" src="assets/images/asempa-royal-family-logo.jpeg" alt="Asempa Royal Family logo" width="52" height="52">
+        <h2 id="familyName" data-brand-name="true">Asempa Royal Family</h2>
+        <span>Dues Management</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
+        <a href="members.html" class="nav-item" data-page="members">Members</a>
+        <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="disbursements.html" class="nav-item" data-page="disbursements">Disbursements</a>
+        <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
+        <a href="users.html" class="nav-item" data-page="users">Users</a>
+        <a href="#" id="logoutBtn" class="nav-item">Logout</a>
+      </nav>
+    </aside>
+
+    <div class="main-content">
+      <header class="top-header">
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+        <h1 class="page-title" style="margin:0;font-size:1.125rem;">Disbursements</h1>
+        <div class="header-user">
+          <div class="header-user-info">
+            <div id="userName" class="header-user-name"></div>
+            <div id="userRole" class="header-user-role"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <div class="table-toolbar">
+          <select id="filterYear" class="form-control" style="width:auto;"></select>
+        </div>
+        <div id="summaryCards" class="card-grid"></div>
+
+        <div class="card-section">
+          <h3>Record Disbursement</h3>
+          <form id="disbursementForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="disbursementDate" class="required">Date</label>
+                <input type="date" id="disbursementDate" class="form-control" required>
+              </div>
+              <div class="form-group">
+                <label for="disbursementAmount" class="required">Amount (GHS)</label>
+                <input type="number" id="disbursementAmount" class="form-control" min="0.01" step="0.01" required>
+              </div>
+              <div class="form-group">
+                <label for="disbursementChannel" class="required">Channel</label>
+                <select id="disbursementChannel" class="form-control" required>
+                  <option value="Cash">Cash</option>
+                  <option value="MoMo">MoMo</option>
+                  <option value="Bank">Bank</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="disbursementPurpose" class="required">Purpose</label>
+              <input type="text" id="disbursementPurpose" class="form-control" maxlength="200" placeholder="What was the money used for?" required>
+            </div>
+            <div class="form-group">
+              <label for="disbursementNotes">Notes (optional)</label>
+              <textarea id="disbursementNotes" class="form-control" rows="2"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Record Disbursement</button>
+          </form>
+        </div>
+
+        <div class="card-section">
+          <h3>Disbursement Log</h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Date</th>
+                  <th>Purpose</th>
+                  <th>Amount</th>
+                  <th>Channel</th>
+                  <th>Recorded By</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="disbursementsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let session;
+    let disbursementData = {};
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      session = initPageLayout('disbursements', ['Admin', 'Treasurer']);
+      if (!session) return;
+
+      document.getElementById('disbursementDate').value = new Date().toISOString().slice(0, 10);
+
+      const filterYearEl = document.getElementById('filterYear');
+      filterYearEl.innerHTML = '<option value="all">All Time</option>' +
+        getYearOptions(10).map(function (y) {
+          return '<option value="' + y + '">' + y + '</option>';
+        }).join('');
+      filterYearEl.addEventListener('change', loadDisbursements);
+
+      document.getElementById('disbursementForm').addEventListener('submit', recordDisbursement);
+      await loadDisbursements();
+    });
+
+    async function loadDisbursements() {
+      const year = document.getElementById('filterYear').value;
+      const [disbResult, collectionsResult] = await Promise.all([
+        API.getDisbursements(year),
+        API.getTotalCollections(year)
+      ]);
+
+      if (!disbResult.success) {
+        showToast(disbResult.error, 'error');
+        return;
+      }
+      if (!collectionsResult.success) {
+        showToast(collectionsResult.error, 'error');
+        return;
+      }
+
+      disbursementData = disbResult.data;
+      const financial = collectionsResult.data;
+
+      document.getElementById('summaryCards').innerHTML = `
+        <div class="card"><div class="card-label">Period</div><div class="card-value">${financial.period}</div></div>
+        <div class="card"><div class="card-label">Total Collections</div><div class="card-value accent">${formatCurrency(financial.totalCollected)}</div></div>
+        <div class="card"><div class="card-label">Total Disbursements</div><div class="card-value danger">${formatCurrency(financial.totalDisbursements)}</div></div>
+        <div class="card"><div class="card-label">Net Balance</div><div class="card-value ${(financial.netBalance || 0) >= 0 ? 'success' : 'danger'}">${formatCurrency(financial.netBalance)}</div></div>`;
+
+      const tbody = document.getElementById('disbursementsBody');
+      const rows = disbursementData.disbursements || [];
+      tbody.innerHTML = rows.map(function (d) {
+        return `<tr>
+          <td>${d.DisbursementID}</td>
+          <td>${formatDate(d.DisbursementDate)}</td>
+          <td>${d.Purpose}</td>
+          <td>${formatCurrency(d.Amount)}</td>
+          <td>${d.Channel}</td>
+          <td>${d.RecordedBy || '—'}</td>
+          <td><button class="btn btn-sm btn-danger" onclick="deleteDisbursement('${d.DisbursementID}')">Delete</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7" class="empty-state">No records found</td></tr>';
+      refreshResponsiveTables();
+    }
+
+    async function recordDisbursement(e) {
+      e.preventDefault();
+      const result = await API.recordDisbursement({
+        disbursementDate: document.getElementById('disbursementDate').value,
+        amount: document.getElementById('disbursementAmount').value,
+        channel: document.getElementById('disbursementChannel').value,
+        purpose: document.getElementById('disbursementPurpose').value.trim(),
+        notes: document.getElementById('disbursementNotes').value.trim()
+      });
+
+      if (result.success) {
+        showToast('Disbursement recorded');
+        document.getElementById('disbursementForm').reset();
+        document.getElementById('disbursementDate').value = new Date().toISOString().slice(0, 10);
+        await loadDisbursements();
+      } else {
+        showToast(result.error || 'Failed to record disbursement', 'error');
+      }
+    }
+
+    async function deleteDisbursement(disbursementId) {
+      const reason = prompt('Enter reason for deleting disbursement ' + disbursementId + ':');
+      if (!reason) return;
+      const result = await API.deleteDisbursement(disbursementId, reason);
+      if (result.success) {
+        showToast('Disbursement deleted');
+        await loadDisbursements();
+      } else {
+        showToast(result.error, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

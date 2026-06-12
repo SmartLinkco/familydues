@@ -32,6 +32,7 @@
         <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
         <a href="members.html" class="nav-item" data-page="members">Members</a>
         <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="disbursements.html" class="nav-item" data-page="disbursements">Disbursements</a>
         <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
         <a href="users.html" class="nav-item" data-page="users">Users</a>
         <a href="#" id="logoutBtn" class="nav-item">Logout</a>
@@ -143,6 +144,19 @@
                 <option value="Under18">Under 18</option>
                 <option value="Unemployed">Unemployed</option>
                 <option value="Elderly">Elderly</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row" id="acceptanceFeeFields">
+            <div class="form-group">
+              <label for="acceptanceFeeAmount">Acceptance Fee (GHS)</label>
+              <input type="number" id="acceptanceFeeAmount" class="form-control" min="0" step="0.01">
+            </div>
+            <div class="form-group" id="waiveFeeGroup" style="display:none;">
+              <label for="acceptanceFeeWaived">Waive Acceptance Fee</label>
+              <select id="acceptanceFeeWaived" class="form-control">
+                <option value="FALSE">No</option>
+                <option value="TRUE">Yes (Admin waiver)</option>
               </select>
             </div>
           </div>
@@ -269,6 +283,9 @@
       document.getElementById('duesAmount').value = m.DuesAmount || 0;
       document.getElementById('status').value = m.Status || 'Active';
       document.getElementById('exemptionReason').value = m.ExemptionReason || 'none';
+      document.getElementById('acceptanceFeeAmount').value = m.AcceptanceFeeAmount || 10;
+      document.getElementById('acceptanceFeeWaived').value = String(m.AcceptanceFeeWaived).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
+      document.getElementById('waiveFeeGroup').style.display = session.role === 'Admin' ? 'block' : 'none';
       document.getElementById('notes').value = m.Notes || '';
       openModal('memberModal');
     }
@@ -292,8 +309,12 @@
         duesAmount: document.getElementById('duesAmount').value,
         status: document.getElementById('status').value,
         exemptionReason: document.getElementById('exemptionReason').value,
+        acceptanceFeeAmount: document.getElementById('acceptanceFeeAmount').value,
         notes: document.getElementById('notes').value.trim()
       };
+      if (session.role === 'Admin') {
+        data.acceptanceFeeWaived = document.getElementById('acceptanceFeeWaived').value === 'TRUE';
+      }
 
       const editId = document.getElementById('editMemberId').value;
       let result;

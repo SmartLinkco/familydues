@@ -9,6 +9,7 @@ const NAV_ICONS = {
   dashboard: '▣',
   members: '◎',
   payments: '◈',
+  disbursements: '◧',
   reports: '▤',
   users: '◉',
   logout: '⎋',
