@@ -247,6 +247,45 @@ body {
   font-size: 9pt;
 }
 
+.print-matrix-banner h3 {
+  color: #1B5E20;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.print-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+}
+
+.print-matrix-table th,
+.print-matrix-table td {
+  border: 1px solid #a5d6a7;
+  padding: 4px 5px;
+  text-align: center;
+}
+
+.print-matrix-table th {
+  font-weight: 700;
+  font-size: 8pt;
+  background: #e8f5e9;
+  color: #1B5E20;
+}
+
+.print-matrix-table .print-matrix-name {
+  text-align: left;
+  font-weight: 700;
+  color: #144717;
+  text-transform: uppercase;
+  background: #f1f8f2;
+  min-width: 140px;
+}
+
+.print-matrix-table td.num {
+  min-width: 36px;
+}
+
 @media print {
   body { background: #fff; }
   .print-section { page-break-inside: avoid; }

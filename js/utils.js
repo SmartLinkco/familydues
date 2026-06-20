@@ -67,7 +67,15 @@ function showToast(message, type) {
   }, 4000);
 }
 
+let _loadingCount = 0;
+
 function showLoading(show) {
+  if (show) {
+    _loadingCount++;
+  } else {
+    _loadingCount = Math.max(0, _loadingCount - 1);
+  }
+
   let overlay = document.querySelector('.loading-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -75,7 +83,7 @@ function showLoading(show) {
     overlay.innerHTML = '<div class="spinner"></div>';
     document.body.appendChild(overlay);
   }
-  overlay.classList.toggle('visible', show);
+  overlay.classList.toggle('visible', _loadingCount > 0);
 }
 
 function confirmAction(message) {
@@ -396,7 +404,7 @@ function getInitials(name) {
 }
 
 function refreshResponsiveTables() {
-  document.querySelectorAll('.table-wrapper').forEach(function (wrapper) {
+  document.querySelectorAll('.table-wrapper:not(.dues-matrix-wrapper)').forEach(function (wrapper) {
     wrapper.classList.add('responsive-table');
   });
 

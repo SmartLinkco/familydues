@@ -27,21 +27,94 @@ function isAcceptanceFeeComplete(member) {
 }
 
 function getAllPaymentRecords() {
-  return sheetToObjects(getSheet('PAYMENTS')).map(normalizePaymentRecord);
+  return getCachedPayments();
+}
+
+// ─── Request-scoped caches (one sheet read per request) ─────────────────────
+
+var _requestCache = {
+  payments: null,
+  members: null,
+  disbursements: null,
+  paymentIndex: null
+};
+
+function clearRequestCaches() {
+  _requestCache.payments = null;
+  _requestCache.members = null;
+  _requestCache.disbursements = null;
+  _requestCache.paymentIndex = null;
+}
+
+function invalidatePaymentCaches() {
+  _requestCache.payments = null;
+  _requestCache.paymentIndex = null;
+}
+
+function invalidateMemberCaches() {
+  _requestCache.members = null;
+}
+
+function invalidateDisbursementCaches() {
+  _requestCache.disbursements = null;
+}
+
+function getCachedPayments() {
+  if (!_requestCache.payments) {
+    _requestCache.payments = sheetToObjects(getSheet('PAYMENTS')).map(normalizePaymentRecord);
+  }
+  return _requestCache.payments;
+}
+
+function getCachedMembers() {
+  if (!_requestCache.members) {
+    _requestCache.members = sheetToObjects(getSheet('MEMBERS'));
+  }
+  return _requestCache.members;
+}
+
+function getCachedDisbursements() {
+  if (!_requestCache.disbursements) {
+    var sheet = getSpreadsheet().getSheetByName('DISBURSEMENTS');
+    if (!sheet || sheet.getLastRow() < 2) {
+      _requestCache.disbursements = [];
+    } else {
+      _requestCache.disbursements = sheetToObjects(sheet).map(normalizeDisbursementRecord);
+    }
+  }
+  return _requestCache.disbursements;
+}
+
+function getPaymentIndex() {
+  if (!_requestCache.paymentIndex) {
+    _requestCache.paymentIndex = {};
+    getCachedPayments().forEach(function (p) {
+      if (getPaymentType(p) !== 'MonthlyDues') return;
+      var key = String(p.MemberID) + '::' + normalizeMonthLabel(p.Month);
+      if (!_requestCache.paymentIndex[key]) _requestCache.paymentIndex[key] = 0;
+      _requestCache.paymentIndex[key] += parseFloat(p.AmountPaid) || 0;
+    });
+  }
+  return _requestCache.paymentIndex;
+}
+
+function getTotalPaidForMonth(memberId, month) {
+  var key = String(memberId) + '::' + normalizeMonthLabel(month);
+  return getPaymentIndex()[key] || 0;
+}
+
+function getMonthCollectedTotal(month, eligibleMembers) {
+  var label = normalizeMonthLabel(month);
+  var index = getPaymentIndex();
+  var total = 0;
+  eligibleMembers.forEach(function (m) {
+    total += index[String(m.MemberID) + '::' + label] || 0;
+  });
+  return total;
 }
 
 function getPaymentType(p) {
   return p.PaymentType || 'MonthlyDues';
-}
-
-function getTotalPaidForMonth(memberId, month) {
-  var total = 0;
-  getAllPaymentRecords().forEach(function (p) {
-    if (String(p.MemberID) !== String(memberId)) return;
-    if (getPaymentType(p) !== 'MonthlyDues') return;
-    if (monthsMatch(p.Month, month)) total += parseFloat(p.AmountPaid) || 0;
-  });
-  return total;
 }
 
 function getMemberMonthStatus(member, month) {
@@ -330,6 +403,8 @@ function recordPayment(params, username) {
   }
 
   auditLog(username, 'RECORD_PAYMENT', batchId + ' for ' + memberId + ' (' + paymentType + ')');
+  invalidatePaymentCaches();
+  invalidateMemberCaches();
   return {
     success: true,
     data: {
@@ -443,13 +518,15 @@ function deletePayment(params, username) {
   if (hadAcceptanceFee && memberId) revertAcceptanceFeePaid(memberId);
 
   auditLog(username, 'DELETE_PAYMENT', targetBatch + ' (' + deleted + ' lines) - Reason: ' + reason);
+  invalidatePaymentCaches();
+  invalidateMemberCaches();
   return { success: true, data: { paymentId: paymentId, batchId: targetBatch, deleted: deleted }, error: '' };
 }
 
 // ─── Reports ─────────────────────────────────────────────────────────────────
 
 function getEligibleMembers() {
-  return sheetToObjects(getSheet('MEMBERS')).filter(function (m) {
+  return getCachedMembers().filter(function (m) {
     return isMonthlyDuesEligible(m);
   });
 }
@@ -577,7 +654,8 @@ function getMemberHistory(params, sessionMemberId, role) {
   var member = getMemberObject(memberId);
   if (!member) return { success: false, data: {}, error: 'Member not found' };
 
-  var payments = getAllPaymentRecords().filter(function (p) {
+  var duesStatus = getMemberDuesStatus({ memberId: memberId }, memberId, role);
+  var payments = getCachedPayments().filter(function (p) {
     return String(p.MemberID) === String(memberId);
   });
 
@@ -590,10 +668,12 @@ function getMemberHistory(params, sessionMemberId, role) {
   var monthsPaid = 0;
   var totalPaid = 0;
 
-  for (var m = 0; m < maxMonth; m++) {
-    var label = formatMonthLabel(new Date(year, m, 1));
-    if (getMemberMonthStatus(member, label) === 'Paid') monthsPaid++;
-  }
+  (duesStatus.data.monthGrid || []).forEach(function (entry) {
+    var monthDate = parseMonthLabel(entry.month);
+    if (monthDate && monthDate.getFullYear() === year && monthDate.getMonth() < maxMonth) {
+      if (entry.status === 'Paid') monthsPaid++;
+    }
+  });
 
   payments.forEach(function (p) {
     totalPaid += parseFloat(p.AmountPaid) || 0;
@@ -601,8 +681,6 @@ function getMemberHistory(params, sessionMemberId, role) {
 
   var monthsMissed = Math.max(0, maxMonth - monthsPaid);
   var compliance = maxMonth > 0 ? Math.round((monthsPaid / maxMonth) * 100) : 0;
-
-  var duesStatus = getMemberDuesStatus({ memberId: memberId }, memberId, role);
 
   return {
     success: true,
@@ -806,9 +884,102 @@ function getTotalCollections(params) {
   };
 }
 
+function formatMonthShort(monthIndex) {
+  var shorts = ['JAN.', 'FEB.', 'MAR.', 'APR.', 'MAY', 'JUN.', 'JUL.', 'AUG.', 'SEP.', 'OCT.', 'NOV.', 'DEC..'];
+  return shorts[monthIndex] || '';
+}
+
+function getAcceptanceFeeMatrixCell(member) {
+  var amount = getMemberAcceptanceFee(member);
+  var waived = String(member.AcceptanceFeeWaived).toUpperCase() === 'TRUE';
+  var paid = String(member.AcceptanceFeePaid).toUpperCase() === 'TRUE';
+
+  if (waived) {
+    return { status: 'Waived', display: 'W', amount: 0 };
+  }
+  if (paid) {
+    return { status: 'Paid', display: String(amount), amount: amount };
+  }
+  if (!canPayAcceptanceFee(member)) {
+    return { status: 'N/A', display: '', amount: 0 };
+  }
+  return { status: 'Unpaid', display: '', amount: 0 };
+}
+
+function getDuesMatrixReport(params) {
+  var year = parseInt(params.year || params.Year || new Date().getFullYear(), 10);
+  var startMonth = parseInt(params.startMonth || params.StartMonth || 1, 10);
+  if (isNaN(year)) year = new Date().getFullYear();
+  if (startMonth < 1 || startMonth > 12) startMonth = 1;
+
+  var monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  var columns = [];
+  for (var m = startMonth - 1; m < 12; m++) {
+    var monthLabel = formatMonthLabel(new Date(year, m, 1));
+    columns.push({
+      month: monthLabel,
+      shortLabel: formatMonthShort(m),
+      displayLabel: monthNames[m].substring(0, 3).toUpperCase(),
+      yearLabel: String(year),
+      monthIndex: m
+    });
+  }
+
+  var config = getConfigMap();
+  var familyName = config.FamilyName || 'Family Dues';
+  var title = String(familyName).toUpperCase() + ' MONTHLY DUES FROM ' +
+    monthNames[startMonth - 1].toUpperCase() + ' ' + year;
+
+  var members = getCachedMembers()
+    .filter(function (member) { return isMonthlyDuesEligible(member); })
+    .sort(function (a, b) {
+      return String(a.FullName || '').localeCompare(String(b.FullName || ''));
+    });
+
+  var rows = members.map(function (member, idx) {
+    var monthCells = columns.map(function (col) {
+      var dues = parseFloat(member.DuesAmount) || 0;
+      var paid = getTotalPaidForMonth(member.MemberID, col.month);
+      var status = getMemberMonthStatus(member, col.month);
+      var display = '';
+      if (status === 'Paid') display = String(paid || dues);
+      else if (status === 'Partial') display = String(paid);
+
+      return {
+        month: col.month,
+        status: status,
+        display: display,
+        amount: paid,
+        amountDue: dues
+      };
+    });
+
+    return {
+      index: idx + 1,
+      MemberID: member.MemberID,
+      FullName: member.FullName,
+      acceptanceFee: getAcceptanceFeeMatrixCell(member),
+      months: monthCells
+    };
+  });
+
+  return {
+    success: true,
+    data: {
+      year: year,
+      startMonth: startMonth,
+      title: title,
+      columns: columns,
+      members: rows
+    },
+    error: ''
+  };
+}
+
 function buildFinancialSummary(year) {
-  var payments = getAllPaymentRecords();
-  var disbursements = getAllDisbursementRecords();
+  var payments = getCachedPayments().slice();
+  var disbursements = getCachedDisbursements().slice();
   payments = filterPaymentsByYear(payments, year);
   disbursements = filterDisbursementsByYear(disbursements, year);
   payments.sort(function (a, b) {
@@ -862,17 +1033,20 @@ function getDashboardData(params, sessionMemberId, role) {
 
     var chartData = [];
     var now = new Date();
+    var eligible = getEligibleMembers();
     for (var i = 5; i >= 0; i--) {
       var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       var label = formatMonthLabel(d);
-      var s = getMonthlySummary({ month: label });
-      chartData.push({ month: label, collected: s.data.totalCollected });
+      chartData.push({
+        month: label,
+        collected: getMonthCollectedTotal(label, eligible)
+      });
     }
     result.chartData = chartData;
   }
 
   if (role === 'Secretary') {
-    var allMembers = sheetToObjects(getSheet('MEMBERS'));
+    var allMembers = getCachedMembers();
     result.activeCount = allMembers.filter(function (m) { return m.Status === 'Active'; }).length;
     result.exemptCount = allMembers.filter(function (m) { return m.Status === 'Exempt'; }).length;
   }
@@ -889,11 +1063,10 @@ function getDashboardData(params, sessionMemberId, role) {
         memberName: member.FullName
       };
     }
-    var history = getMemberHistory({ memberId: sessionMemberId }, sessionMemberId, role);
-    result.paymentHistory = history.data.monthGrid || [];
-    result.acceptanceFee = history.data.acceptanceFee;
-    result.arrears = history.data.arrears;
-    result.advance = history.data.advance;
+    result.paymentHistory = duesStatus.data.monthGrid || [];
+    result.acceptanceFee = duesStatus.data.acceptanceFee;
+    result.arrears = duesStatus.data.arrears;
+    result.advance = duesStatus.data.advance;
   }
 
   return { success: true, data: result, error: '' };
@@ -902,10 +1075,7 @@ function getDashboardData(params, sessionMemberId, role) {
 // ─── Disbursements ───────────────────────────────────────────────────────────
 
 function getAllDisbursementRecords() {
-  migrateDatabase();
-  var sheet = getSpreadsheet().getSheetByName('DISBURSEMENTS');
-  if (!sheet || sheet.getLastRow() < 2) return [];
-  return sheetToObjects(sheet).map(normalizeDisbursementRecord);
+  return getCachedDisbursements();
 }
 
 function normalizeDisbursementRecord(d) {
@@ -998,6 +1168,7 @@ function recordDisbursement(params, username) {
   ]);
 
   auditLog(username, 'RECORD_DISBURSEMENT', disbursementId + ' — ' + purpose + ' — GHS ' + amount);
+  invalidateDisbursementCaches();
   return {
     success: true,
     data: normalizeDisbursementRecord({
@@ -1044,5 +1215,6 @@ function deleteDisbursement(params, username) {
 
   sheet.deleteRow(row);
   auditLog(username, 'DELETE_DISBURSEMENT', disbursementId + ' - Reason: ' + reason);
+  invalidateDisbursementCaches();
   return { success: true, data: { disbursementId: disbursementId }, error: '' };
 }

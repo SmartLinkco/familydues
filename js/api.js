@@ -3,9 +3,9 @@
  * All requests use GET to avoid CORS preflight issues with Google Apps Script Web Apps
  */
 
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbw2TvRa0-_0_1ztPvy3yDya6nkMSNBtnXbSCty3NqunqvXAeqs8844iVtXOYz46rkRu/exec';
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzVN0YwMOsDnJfq__6rBKH5Zox_pdWHjkkPJ1ALxayCCApj_t8hGakshXHABKmvUMDY/exec';
 
-async function apiCall(action, params = {}) {
+async function apiCall(action, params = {}, options = {}) {
   const session = getSession();
   const query = new URLSearchParams({ action, ...params });
 
@@ -14,9 +14,10 @@ async function apiCall(action, params = {}) {
   }
 
   const url = `${BACKEND_URL}?${query.toString()}`;
+  const silent = options.silent === true;
 
   try {
-    showLoading(true);
+    if (!silent) showLoading(true);
     const response = await fetch(url, { method: 'GET', redirect: 'follow' });
     const data = await response.json();
 
@@ -30,7 +31,7 @@ async function apiCall(action, params = {}) {
   } catch (err) {
     return { success: false, data: {}, error: err.message || 'Network error' };
   } finally {
-    showLoading(false);
+    if (!silent) showLoading(false);
   }
 }
 
@@ -108,6 +109,9 @@ const API = {
 
   getTotalCollections: (year = 'all') =>
     apiCall('getTotalCollections', { year: String(year) }),
+
+  getDuesMatrixReport: (year, startMonth = 1) =>
+    apiCall('getDuesMatrixReport', { year: String(year), startMonth: String(startMonth) }),
 
   recordDisbursement: (data) =>
     apiCall('recordDisbursement', data),

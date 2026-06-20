@@ -18,6 +18,7 @@ function doPost(e) {
 
 function handleRequest(e) {
   try {
+    clearRequestCaches();
     var params = parseParams(e);
     var action = params.action || '';
 
@@ -107,6 +108,9 @@ function handleRequest(e) {
         break;
       case 'getTotalCollections':
         result = getTotalCollections(params);
+        break;
+      case 'getDuesMatrixReport':
+        result = getDuesMatrixReport(params);
         break;
       case 'recordDisbursement':
         result = recordDisbursement(params, username);
@@ -506,13 +510,13 @@ function checkPermission(action, role, params, memberId) {
     'getMembers', 'getMemberById', 'createUser', 'updateUserRole', 'resetPassword',
     'toggleUserActive', 'getUsers', 'recordPayment', 'getPayments', 'getPaymentsByMember',
     'deletePayment', 'getMonthlySummary', 'getMemberHistory', 'getOverdueMembers',
-    'getYearEndSummary', 'getTotalCollections', 'recordDisbursement', 'getDisbursements',
+    'getYearEndSummary', 'getTotalCollections', 'getDuesMatrixReport', 'recordDisbursement', 'getDisbursements',
     'deleteDisbursement', 'getDashboardData', 'getMemberDuesStatus', 'sendReminders', 'sendReminderToMember'];
 
   var treasurerActions = ['getConfig', 'getMembers', 'getMemberById', 'recordPayment',
     'getPayments', 'getPaymentsByMember', 'deletePayment', 'getMonthlySummary',
     'getMemberHistory', 'getOverdueMembers', 'getYearEndSummary', 'getTotalCollections',
-    'recordDisbursement', 'getDisbursements', 'deleteDisbursement', 'getDashboardData',
+    'getDuesMatrixReport', 'recordDisbursement', 'getDisbursements', 'deleteDisbursement', 'getDashboardData',
     'getMemberDuesStatus', 'sendReminderToMember'];
 
   var secretaryActions = ['getConfig', 'addMember', 'updateMember', 'getMembers',
@@ -610,6 +614,13 @@ function handleLogin(params) {
 }
 
 function getMemberObject(memberId) {
+  if (typeof getCachedMembers === 'function') {
+    var cached = getCachedMembers();
+    for (var i = 0; i < cached.length; i++) {
+      if (String(cached[i].MemberID) === String(memberId)) return cached[i];
+    }
+    return null;
+  }
   var sheet = getSheet('MEMBERS');
   var row = findRowByColumn(sheet, 0, memberId);
   if (row === -1) return null;
