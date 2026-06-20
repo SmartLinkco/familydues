@@ -11,6 +11,7 @@ const NAV_ICONS = {
   payments: '◈',
   disbursements: '◧',
   reports: '▤',
+  'audit-logs': '◫',
   users: '◉',
   logout: '⎋',
   more: '☰'
@@ -245,7 +246,9 @@ function applyRoleNav(role) {
     dashboard: ['Admin', 'Treasurer', 'Secretary', 'Member'],
     members: ['Admin', 'Secretary'],
     payments: ['Admin', 'Treasurer'],
+    disbursements: ['Admin', 'Treasurer'],
     reports: ['Admin', 'Treasurer'],
+    'audit-logs': ['Admin'],
     users: ['Admin']
   };
 

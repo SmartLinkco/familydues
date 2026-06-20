@@ -112,6 +112,9 @@ function handleRequest(e) {
       case 'getDuesMatrixReport':
         result = getDuesMatrixReport(params);
         break;
+      case 'getAuditLogs':
+        result = getAuditLogs(params);
+        break;
       case 'recordDisbursement':
         result = recordDisbursement(params, username);
         break;
@@ -510,7 +513,7 @@ function checkPermission(action, role, params, memberId) {
     'getMembers', 'getMemberById', 'createUser', 'updateUserRole', 'resetPassword',
     'toggleUserActive', 'getUsers', 'recordPayment', 'getPayments', 'getPaymentsByMember',
     'deletePayment', 'getMonthlySummary', 'getMemberHistory', 'getOverdueMembers',
-    'getYearEndSummary', 'getTotalCollections', 'getDuesMatrixReport', 'recordDisbursement', 'getDisbursements',
+    'getYearEndSummary', 'getTotalCollections', 'getDuesMatrixReport', 'getAuditLogs', 'recordDisbursement', 'getDisbursements',
     'deleteDisbursement', 'getDashboardData', 'getMemberDuesStatus', 'sendReminders', 'sendReminderToMember'];
 
   var treasurerActions = ['getConfig', 'getMembers', 'getMemberById', 'recordPayment',
@@ -545,6 +548,74 @@ function checkPermission(action, role, params, memberId) {
 function auditLog(username, action, details) {
   var sheet = getSheet('AUDIT_LOG');
   sheet.appendRow([new Date(), username || 'system', action, details || '', '']);
+}
+
+function getAuditLogs(params) {
+  var sheet = getSheet('AUDIT_LOG');
+  var logs = sheetToObjects(sheet).map(function (entry) {
+    return {
+      Timestamp: entry.Timestamp,
+      Username: entry.Username || '',
+      Action: entry.Action || '',
+      Details: entry.Details || '',
+      IPAddress: entry.IPAddress || ''
+    };
+  });
+
+  var actionFilter = String(params.actionFilter || params.ActionFilter || 'all');
+  var usernameFilter = String(params.username || params.Username || '').trim();
+  var year = params.year || params.Year || 'all';
+  var limit = parseInt(params.limit || params.Limit || 200, 10);
+  if (isNaN(limit) || limit < 1) limit = 200;
+  if (limit > 1000) limit = 1000;
+
+  var actionSet = {};
+  logs.forEach(function (entry) {
+    if (entry.Action) actionSet[entry.Action] = true;
+  });
+
+  if (actionFilter && actionFilter !== 'all') {
+    logs = logs.filter(function (entry) {
+      return String(entry.Action) === actionFilter;
+    });
+  }
+
+  if (usernameFilter) {
+    var needle = usernameFilter.toLowerCase();
+    logs = logs.filter(function (entry) {
+      return String(entry.Username || '').toLowerCase().indexOf(needle) !== -1;
+    });
+  }
+
+  if (year && year !== 'all') {
+    var y = parseInt(year, 10);
+    if (!isNaN(y)) {
+      logs = logs.filter(function (entry) {
+        var d = new Date(entry.Timestamp);
+        return !isNaN(d.getTime()) && d.getFullYear() === y;
+      });
+    }
+  }
+
+  logs.sort(function (a, b) {
+    return new Date(b.Timestamp) - new Date(a.Timestamp);
+  });
+
+  var total = logs.length;
+  var slice = logs.slice(0, limit);
+  var actions = Object.keys(actionSet).sort();
+
+  return {
+    success: true,
+    data: {
+      logs: slice,
+      total: total,
+      returned: slice.length,
+      limit: limit,
+      actions: actions
+    },
+    error: ''
+  };
 }
 
 // ─── AUTH ───────────────────────────────────────────────────────────────────

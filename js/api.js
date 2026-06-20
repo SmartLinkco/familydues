@@ -3,11 +3,11 @@
  * All requests use GET to avoid CORS preflight issues with Google Apps Script Web Apps
  */
 
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzVN0YwMOsDnJfq__6rBKH5Zox_pdWHjkkPJ1ALxayCCApj_t8hGakshXHABKmvUMDY/exec';
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwFsYyY6jfQdlsvqxRabQZwcVnMi9_Py7Rv3MawWXMlORGxLujg5Qrm21Fkwyt_rYfr/exec';
 
 async function apiCall(action, params = {}, options = {}) {
   const session = getSession();
-  const query = new URLSearchParams({ action, ...params });
+  const query = new URLSearchParams({ ...params, action });
 
   if (session && session.token && action !== 'login') {
     query.set('token', session.token);
@@ -112,6 +112,9 @@ const API = {
 
   getDuesMatrixReport: (year, startMonth = 1) =>
     apiCall('getDuesMatrixReport', { year: String(year), startMonth: String(startMonth) }),
+
+  getAuditLogs: (filters = {}) =>
+    apiCall('getAuditLogs', filters),
 
   recordDisbursement: (data) =>
     apiCall('recordDisbursement', data),

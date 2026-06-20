@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Asempa Royal Family system audit log — review admin actions and system events.">
+  <meta name="theme-color" content="#1B5E20">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="assets/images/asempa-royal-family-logo.jpeg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="assets/images/asempa-royal-family-logo.jpeg">
+  <link rel="manifest" href="site.webmanifest">
+  <title>Audit Logs — Asempa Royal Family Dues</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/branding.js"></script>
+  <script>
+    applyBranding({
+      title: 'Audit Logs — Asempa Royal Family Dues',
+      description: 'Asempa Royal Family system audit log — review admin actions and system events.'
+    });
+  </script>
+</head>
+<body>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <img class="brand-logo-img sidebar-brand-logo" src="assets/images/asempa-royal-family-logo.jpeg" alt="Asempa Royal Family logo" width="52" height="52">
+        <h2 id="familyName" data-brand-name="true">Asempa Royal Family</h2>
+        <span>Dues Management</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item" data-page="dashboard">Dashboard</a>
+        <a href="members.html" class="nav-item" data-page="members">Members</a>
+        <a href="payments.html" class="nav-item" data-page="payments">Payments</a>
+        <a href="disbursements.html" class="nav-item" data-page="disbursements">Disbursements</a>
+        <a href="reports.html" class="nav-item" data-page="reports">Reports</a>
+        <a href="audit-logs.html" class="nav-item" data-page="audit-logs">Audit Logs</a>
+        <a href="users.html" class="nav-item" data-page="users">Users</a>
+        <a href="#" id="logoutBtn" class="nav-item">Logout</a>
+      </nav>
+    </aside>
+
+    <div class="main-content">
+      <header class="top-header">
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+        <h1 class="page-title" style="margin:0;font-size:1.125rem;">Audit Logs</h1>
+        <div class="header-user">
+          <div class="header-user-info">
+            <div id="userName" class="header-user-name"></div>
+            <div id="userRole" class="header-user-role"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <div class="table-toolbar">
+          <select id="auditYear" class="form-control" style="width:auto;"></select>
+          <select id="auditAction" class="form-control" style="width:auto;min-width:160px;">
+            <option value="all">All actions</option>
+          </select>
+          <input type="text" id="auditUsername" class="form-control" placeholder="Filter by username" style="width:auto;min-width:140px;">
+          <select id="auditLimit" class="form-control" style="width:auto;">
+            <option value="100">Last 100</option>
+            <option value="200" selected>Last 200</option>
+            <option value="500">Last 500</option>
+            <option value="1000">Last 1000</option>
+          </select>
+          <div class="toolbar-actions">
+            <button class="btn btn-outline btn-sm" onclick="loadAuditLogs()">Refresh</button>
+            <button class="btn btn-outline btn-sm" onclick="exportAuditCSV()">Export to CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="printAuditReport()">Print</button>
+          </div>
+        </div>
+
+        <div id="auditSummary" class="card-grid"></div>
+
+        <div class="card-section">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date &amp; Time</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="auditLogsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let session;
+    let auditData = {};
+
+    function formatAuditAction(action) {
+      if (!action) return '—';
+      return String(action).replace(/_/g, ' ');
+    }
+
+    function formatAuditTime(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      session = initPageLayout('audit-logs', ['Admin']);
+      if (!session) return;
+
+      document.getElementById('auditYear').innerHTML = '<option value="all">All Time</option>' +
+        getYearOptions(10).map(function (y) {
+          return '<option value="' + y + '">' + y + '</option>';
+        }).join('');
+
+      document.getElementById('auditYear').addEventListener('change', loadAuditLogs);
+      document.getElementById('auditAction').addEventListener('change', loadAuditLogs);
+      document.getElementById('auditUsername').addEventListener('change', loadAuditLogs);
+      document.getElementById('auditLimit').addEventListener('change', loadAuditLogs);
+
+      await loadAuditLogs();
+    });
+
+    async function loadAuditLogs() {
+      const result = await API.getAuditLogs({
+        year: document.getElementById('auditYear').value,
+        actionFilter: document.getElementById('auditAction').value,
+        username: document.getElementById('auditUsername').value.trim(),
+        limit: document.getElementById('auditLimit').value
+      });
+      if (!result.success) {
+        showToast(result.error, 'error');
+        return;
+      }
+      auditData = result.data;
+
+      const actionSelect = document.getElementById('auditAction');
+      const currentAction = actionSelect.value;
+      const options = ['<option value="all">All actions</option>'].concat(
+        (auditData.actions || []).map(function (a) {
+          return '<option value="' + escapeHtml(a) + '">' + escapeHtml(formatAuditAction(a)) + '</option>';
+        })
+      );
+      actionSelect.innerHTML = options.join('');
+      if (currentAction && actionSelect.querySelector('option[value="' + CSS.escape(currentAction) + '"]')) {
+        actionSelect.value = currentAction;
+      }
+
+      document.getElementById('auditSummary').innerHTML = `
+        <div class="card"><div class="card-label">Matching Entries</div><div class="card-value">${auditData.total || 0}</div></div>
+        <div class="card"><div class="card-label">Showing</div><div class="card-value accent">${auditData.returned || 0}</div></div>
+        <div class="card"><div class="card-label">Limit</div><div class="card-value">${auditData.limit || 200}</div></div>`;
+
+      document.getElementById('auditLogsBody').innerHTML = (auditData.logs || []).map(function (entry) {
+        const time = formatAuditTime(entry.Timestamp);
+        return `<tr>
+          <td>${formatDate(entry.Timestamp)}${time ? ' ' + time : ''}</td>
+          <td>${escapeHtml(entry.Username || '—')}</td>
+          <td>${escapeHtml(formatAuditAction(entry.Action))}</td>
+          <td>${escapeHtml(entry.Details || '—')}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="4" class="empty-state">No records found</td></tr>';
+      refreshResponsiveTables();
+    }
+
+    function exportAuditCSV() {
+      exportToCSV((auditData.logs || []).map(function (entry) {
+        return {
+          Timestamp: formatDate(entry.Timestamp) + (formatAuditTime(entry.Timestamp) ? ' ' + formatAuditTime(entry.Timestamp) : ''),
+          Username: entry.Username || '',
+          Action: entry.Action || '',
+          Details: entry.Details || ''
+        };
+      }), 'audit-logs.csv');
+    }
+
+    function printAuditReport() {
+      const rows = (auditData.logs || []).map(function (entry) {
+        const time = formatAuditTime(entry.Timestamp);
+        return [
+          formatDate(entry.Timestamp) + (time ? ' ' + time : ''),
+          entry.Username || '—',
+          formatAuditAction(entry.Action),
+          entry.Details || '—'
+        ];
+      });
+
+      const bodyHtml =
+        '<div class="print-section"><h3>System Audit Log</h3>' +
+        buildPrintTable(['Date & Time', 'User', 'Action', 'Details'], rows, {
+          colClasses: ['', '', '', '']
+        }) +
+        '</div>';
+
+      printReport({
+        title: 'Audit Logs',
+        subtitle: 'Showing ' + (auditData.returned || 0) + ' of ' + (auditData.total || 0) + ' entries',
+        bodyHtml: bodyHtml
+      });
+    }
+  </script>
+</body>
+</html>
